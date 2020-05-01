@@ -12,8 +12,8 @@
 -define(MAX_LIMIT,1000000000).
 -define(MAX_ORDER,100000000000000).
 -define(MIN_ORDER,100).
--define(MIN_OFFSET,10).
--define(MAX_OFFSET,30).
+-define(MIN_OFFSET,10).			%% low limit for step to next rank
+-define(MAX_OFFSET,30).			%% up limit for step to prev rank
 -define(TIMEOUT,90000).
 
 -ifdef(support).
@@ -67,7 +67,7 @@
         register(?MODULE,spawn(fun loop/0)),
         ?SUPPORT andalso apply(?SECONDARY,alg,[]).
 
-    %% Least Recently Used Fast
+    %% Least Frequently Used
     loop() -> loop([?MIN_ORDER,0]).
     loop([O,Q]) ->
         receive
@@ -158,9 +158,9 @@
 
 
     offset(O,Q) ->
-        P = counting(O),
-        C = counting(O*10),
-        F = counting(O*100),
+        P = counting(0,O),
+        C = counting(O,O*10) + P,
+        F = counting(O*10,O*100) + C,
         io:format("P:~p~nC:~p~nF:~p~nO:~p~nQ~p~n",[P,C,F,O,Q]),
         if
             Q < 1 -> O;
@@ -169,45 +169,71 @@
             true -> O
         end.
 
-    counting(O) ->
+    counting(L,O) ->
         put(counter,0),
         Ref = make_ref(),
         if
             O =< ?MAX_LIMIT ->
-                for(0,(O-1) div ?MIN_LIMIT,
+                for(L div ?MIN_LIMIT,(O-1) div ?MIN_LIMIT,
                     fun(I) ->
                         case whereis(list_to_atom("o0" ++ integer_to_list(I))) of
                             undefined -> "skip";
-                            N -> catch N ! {score,{Ref,self()}, if O >= ?MIN_LIMIT*(I+1) -> ?MIN_LIMIT*(I+1); true -> O end}
+                            N ->
+                                catch N ! { score,{Ref,self()},
+                                    if
+                                        O >= ?MIN_LIMIT*(I+1) ->
+                                            if
+                                                I == 0 ->
+                                                    {L+1,?MIN_LIMIT*(I+1)};
+                                                true ->
+                                                    {?MIN_LIMIT*I+1,?MIN_LIMIT*(I+1)}
+                                            end;
+                                        true ->
+                                            {L+1,O}
+                                    end
+                                }
                         end
                     end
                 ),
-                count_loop(length(grep(foreach(0,(O-1) div ?MIN_LIMIT,fun(I) -> I end),
+                count_loop(length(grep(foreach(L div ?MIN_LIMIT,(O-1) div ?MIN_LIMIT,fun(I) -> I end),
                     fun(I) ->
                         case whereis(list_to_atom("o0" ++ integer_to_list(I))) of undefined -> false; _ -> true end
                     end
                 )),Ref);
             true ->
-                for(0,(?MAX_LIMIT-1) div ?MIN_LIMIT,
+                for(L div ?MIN_LIMIT,(?MAX_LIMIT-1) div ?MIN_LIMIT,
                     fun(I) ->
                         case whereis(list_to_atom("o0" ++ integer_to_list(I))) of
                             undefined -> "skip";
-                            N -> catch N ! {score,{Ref,self()}, if O >= ?MIN_LIMIT*(I+1) -> ?MIN_LIMIT*(I+1); true -> O end}
+                            N ->
+                                catch N ! { score,{Ref,self()},
+                                    if
+                                        O >= ?MIN_LIMIT*(I+1) ->
+                                            if
+                                                I == 0 ->
+                                                    {L+1,?MIN_LIMIT*(I+1)};
+                                                true ->
+                                                    {?MIN_LIMIT*I+1,?MIN_LIMIT*(I+1)}
+                                            end;
+                                        true ->	%% never hit in this branch
+                                            {L+1,O}
+                                    end
+                                }
                         end
                     end
                 ),
-                count_loop(length(grep(foreach(0,(?MAX_LIMIT-1) div ?MIN_LIMIT,fun(I) -> I end),
+                count_loop(length(grep(foreach(L div ?MIN_LIMIT,(?MAX_LIMIT-1) div ?MIN_LIMIT,fun(I) -> I end),
                     fun(I) ->
                         case whereis(list_to_atom("o0" ++ integer_to_list(I))) of undefined -> false; _ -> true end
                     end
                 )),Ref),
 
-                for(1,O div ?MAX_LIMIT - 1,
+                for(if L div ?MAX_LIMIT > 0 -> L div ?MAX_LIMIT; true -> 1 end,O div ?MAX_LIMIT - 1,
                     fun(I) ->
                         case whereis(list_to_atom("o" ++ integer_to_list(I))) of undefined -> "skip"; N -> catch N ! {score,{Ref,self()}} end
                     end
                 ),
-                count_loop(length(grep(foreach(1,O div ?MAX_LIMIT - 1,fun(I) -> I end),
+                count_loop(length(grep(foreach(if L div ?MAX_LIMIT > 0 -> L div ?MAX_LIMIT; true -> 1 end,O div ?MAX_LIMIT - 1,fun(I) -> I end),
                     fun(I) ->
                         case whereis(list_to_atom("o" ++ integer_to_list(I))) of undefined -> false; _ -> true end
                     end
@@ -263,8 +289,8 @@
             {reset,{Topic,Key}} ->
                 erase({Topic,Key}),
                 s_score_loop(O);
-            {score,{Ref,PidS},L} ->
-                C = s_scoring(O,L),
+            {score,{Ref,PidS},{L,U}} ->
+                C = s_scoring(L,U),
                 catch PidS ! {{score,Ref},C},
                 s_score_loop(O)
         end.
@@ -274,9 +300,9 @@
         put(counter,get(counter) + length(get_keys(1))),
         get(counter).
 
-    s_scoring(O,L) ->
+    s_scoring(L,U) ->
         put(counter,0),
-        for(?MIN_LIMIT*O+1,L,fun(I) -> put(counter,get(counter) + length(get_keys(I))) end),
+        for(L,U,fun(I) -> put(counter,get(counter) + length(get_keys(I))) end),
         get(counter).
 
 
