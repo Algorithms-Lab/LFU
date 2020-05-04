@@ -153,7 +153,7 @@
                 NQ = reset(TabID,Q),
                 ?SUPPORT andalso call(?SECONDARY,reset,TabID),
                 catch PidS ! {{clean,TabID,Ref},ready},
-                loop([O,NQ])
+                loop([NO,NQ])
         end.
 
 
