@@ -139,7 +139,7 @@
                 catch PidS ! {{state,Stub,Ref},[O,Q]},
                 loop([O,Q]);
             {fetch,{TabID},{Ref,PidS}} ->
-                NO = offset(O,Q,0,0),
+                NO = offset(O,Q,null,null),
                 result(NO,TabID),
                 catch PidS ! {{fetch,{TabID},Ref},ready},
                 loop([NO,Q]);
@@ -148,7 +148,7 @@
                 catch PidS ! {{reset,{TabID},Ref},ready},
                 loop([O,NQ]);
             {clean,{TabID},{Ref,PidS}} ->
-                NO = offset(O,Q,0,0),
+                NO = offset(O,Q,null,null),
                 result(NO,TabID),
                 NQ = reset(TabID,Q),
                 ?SUPPORT andalso call(?SECONDARY,reset,{TabID}),
@@ -158,14 +158,14 @@
 
 
     offset(O,Q,P0,C0) ->
-        P = if P0 > 0 -> P0; true -> counting(0,O) end,
-        C = if C0 > 0 -> C0; true -> counting(O,O*10) + P end,
+        P = if P0 =/= null -> P0; true -> counting(0,O) end,
+        C = if C0 =/= null -> C0; true -> counting(O,O*10) + P end,
         F = counting(O*10,O*100) + C,
         io:format("P:~p~nC:~p~nF:~p~nO:~p~nQ~p~n",[P,C,F,O,Q]),
         if
             Q < 1 -> O;
             C / Q * 100 < ?MIN_OFFSET andalso O*10 =< ?MAX_ORDER andalso F / Q * 100 =< ?MAX_OFFSET -> offset(O*10,Q,C,F);
-            C / Q * 100 > ?MAX_OFFSET andalso O div 10 >= ?MIN_ORDER andalso P / Q * 100 >= ?MIN_OFFSET -> offset(O div 10,Q,0,P);
+            C / Q * 100 > ?MAX_OFFSET andalso O div 10 >= ?MIN_ORDER andalso P / Q * 100 >= ?MIN_OFFSET -> offset(O div 10,Q,null,P);
             true -> O
         end.
 
