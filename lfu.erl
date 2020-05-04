@@ -330,7 +330,7 @@
                 KL)
             end,
         TL),
-        Q - get(reset).
+        Q - erase(reset).
 
 
     result(O,TabID) ->
