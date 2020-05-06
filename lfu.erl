@@ -40,7 +40,7 @@
             Event =:= count ->
                 call(Event,Data);
             Event =:= fetch; Event =:= reset; Event =:= clean ->
-                case ets:info(element(1,Data)) of
+                case ets:info(Data) of
                     undefined -> throw(unknow_table);
                     _ -> call(Event,Data)
                 end;
@@ -71,19 +71,19 @@
     loop() -> loop([?MIN_ORDER,0]).
     loop([O,Q]) ->
         receive
-            {point,{Topic,Key}} ->
-                case get({Topic,Key}) of
+            {point,K} ->
+                case get(K) of
                     undefined ->
                         N = list_to_atom("o0" ++ integer_to_list(0)),
                         case whereis(N) of
                             undefined ->
                                 register(N,spawn(fun() -> s_score_loop(0) end)),
-                                catch N ! {point,{Topic,Key}};
+                                catch N ! {point,K};
                             _ ->
-                                catch N ! {point,{Topic,Key}}
+                                catch N ! {point,K}
                         end,
-                        put({Topic,Key},1),
-                        ?SUPPORT andalso cast(?SECONDARY,point,{Topic,Key}),
+                        put(K,1),
+                        ?SUPPORT andalso cast(?SECONDARY,point,K),
                         loop([O,Q+1]);
                     C ->
                         if
@@ -96,19 +96,19 @@
                                         case whereis(N) of
                                             undefined ->
                                                 register(N,spawn(fun() -> s_score_loop(C div ?MIN_LIMIT) end)),
-                                                catch N ! {point,{Topic,Key}};
+                                                catch N ! {point,K};
                                             _ ->
-                                                catch N ! {point,{Topic,Key}}
+                                                catch N ! {point,K}
                                         end,
-                                        catch list_to_atom("o0" ++ integer_to_list(C div ?MIN_LIMIT - 1)) ! {reset,{Topic,Key}};
+                                        catch list_to_atom("o0" ++ integer_to_list(C div ?MIN_LIMIT - 1)) ! {reset,K};
                                     true ->
                                         N = list_to_atom("o0" ++ integer_to_list(C div ?MIN_LIMIT)),
                                         case whereis(N) of
                                             undefined ->
                                                 register(N,spawn(fun() -> s_score_loop(C div ?MIN_LIMIT) end)),
-                                                catch N ! {point,{Topic,Key}};
+                                                catch N ! {point,K};
                                             _ ->
-                                                catch N ! {point,{Topic,Key}}
+                                                catch N ! {point,K}
                                         end
                                 end;
                             %% after MAX LIMIT
@@ -118,42 +118,42 @@
                                 case whereis(N) of
                                     undefined ->
                                         register(N,spawn(fun() -> q_score_loop(C div ?MAX_LIMIT) end)),
-                                        catch N ! {point,{Topic,Key}};
+                                        catch N ! {point,K};
                                     _ ->
-                                        catch N ! {point,{Topic,Key}}
+                                        catch N ! {point,K}
                                 end,
                                 if
-                                    C div ?MAX_LIMIT > 1 -> catch list_to_atom("o" ++ integer_to_list(C div ?MAX_LIMIT - 1)) ! {reset,{Topic,Key}};
-                                    true -> catch list_to_atom("o0" ++ integer_to_list(C div ?MIN_LIMIT - 1)) ! {reset,{Topic,Key}}
+                                    C div ?MAX_LIMIT > 1 -> catch list_to_atom("o" ++ integer_to_list(C div ?MAX_LIMIT - 1)) ! {reset,K};
+                                    true -> catch list_to_atom("o0" ++ integer_to_list(C div ?MIN_LIMIT - 1)) ! {reset,K}
                                 end;
                             true -> skip
                         end,
-                        put({Topic,Key},C+1),
-                        ?SUPPORT andalso cast(?SECONDARY,point,{Topic,Key}),
+                        put(K,C+1),
+                        ?SUPPORT andalso cast(?SECONDARY,point,K),
                         loop([O,Q])
                 end;
-            {count,{Topic,Key},{Ref,PidS}} ->
-                catch PidS ! {{count,{Topic,Key},Ref},get({Topic,Key})},
+            {count,K,{Ref,PidS}} ->
+                catch PidS ! {{count,K,Ref},get(K)},
                 loop([O,Q]);
             {state,Stub,{Ref,PidS}} ->
                 catch PidS ! {{state,Stub,Ref},[O,Q]},
                 loop([O,Q]);
-            {fetch,{TabID},{Ref,PidS}} ->
+            {fetch,TabID,{Ref,PidS}} ->
                 NO = offset(O,Q,null,null),
                 result(NO,TabID),
-                catch PidS ! {{fetch,{TabID},Ref},ready},
+                catch PidS ! {{fetch,TabID,Ref},ready},
                 loop([NO,Q]);
-            {reset,{TabID},{Ref,PidS}} ->
+            {reset,TabID,{Ref,PidS}} ->
                 NQ = reset(TabID,Q),
-                catch PidS ! {{reset,{TabID},Ref},ready},
+                catch PidS ! {{reset,TabID,Ref},ready},
                 loop([O,NQ]);
-            {clean,{TabID},{Ref,PidS}} ->
+            {clean,TabID,{Ref,PidS}} ->
                 NO = offset(O,Q,null,null),
                 result(NO,TabID),
                 NQ = reset(TabID,Q),
-                ?SUPPORT andalso call(?SECONDARY,reset,{TabID}),
-                catch PidS ! {{clean,{TabID},Ref},ready},
-                loop([O,NQ])
+                ?SUPPORT andalso call(?SECONDARY,reset,TabID),
+                catch PidS ! {{clean,TabID,Ref},ready},
+                loop([NO,NQ])
         end.
 
 
@@ -257,17 +257,17 @@
 
     q_score_loop(O) ->
         receive
-            {point,{Topic,Key}} ->
-                case get({Topic,Key}) of
+            {point,K} ->
+                case get(K) of
                     undefined ->
-                        put({Topic,Key},1),
+                        put(K,1),
                         q_score_loop(O);
                     C ->
-                        put({Topic,Key},C+1),
+                        put(K,C+1),
                         q_score_loop(O)
                 end;
-            {reset,{Topic,Key}} ->
-                erase({Topic,Key}),
+            {reset,K} ->
+                erase(K),
                 q_score_loop(O);
             {score,{Ref,PidS}} ->
                 C = q_scoring(),
@@ -277,17 +277,17 @@
 
     s_score_loop(O) ->
         receive
-            {point,{Topic,Key}} ->
-                case get({Topic,Key}) of
+            {point,K} ->
+                case get(K) of
                     undefined ->
-                        put({Topic,Key},?MIN_LIMIT*O+1),
+                        put(K,?MIN_LIMIT*O+1),
                         s_score_loop(O);
                     C ->
-                        put({Topic,Key},C+1),
+                        put(K,C+1),
                         s_score_loop(O)
                 end;
-            {reset,{Topic,Key}} ->
-                erase({Topic,Key}),
+            {reset,K} ->
+                erase(K),
                 s_score_loop(O);
             {score,{Ref,PidS},{L,U}} ->
                 C = s_scoring(L,U),
@@ -307,28 +307,34 @@
 
 
     reset(TabID,Q) ->
-        L = case ets:info(TabID) of
+        TL = case ets:info(TabID) of
             undefined -> [];
             _ -> ets:tab2list(TabID)
         end,
+        put(reset,0),
         lists:foreach(
-            fun(K) ->
-                C = erase(K),
-                if
-                    (C - 1) div ?MAX_LIMIT == 0 ->
-                        N = list_to_atom("o0" ++ integer_to_list((C-1) div ?MIN_LIMIT)),
-                        catch N ! {reset,K};
-                    true ->
-                        N = list_to_atom("o" ++ integer_to_list((C-1) div ?MAX_LIMIT)),
-                        catch N ! {reset,K}
-                end
+            fun({_,KL}) ->
+                lists:foreach(
+                    fun(K) ->
+                        C = erase(K),
+                        if
+                            (C - 1) div ?MAX_LIMIT == 0 ->
+                                N  = list_to_atom("o0" ++ integer_to_list((C-1) div ?MIN_LIMIT)),
+                                catch N ! {reset,K};
+                            true ->
+                                N = list_to_atom("o" ++ integer_to_list((C-1) div ?MAX_LIMIT)),
+                                catch N ! {reset,K}
+                        end,
+                        put(reset,get(reset)+1)
+                    end,
+                KL)
             end,
-        L),
-        Q - length(L).
+        TL),
+        Q - erase(reset).
 
 
     result(O,TabID) ->
-        for(1,O*10,fun(I) -> ets:insert(TabID,get_keys(I)) end).
+        for(1,O*10,fun(I) -> case get_keys(I) of [] -> 1; KL -> ets:insert(TabID,{I,KL}) end end).
 
 
     foreach(N,N,F) -> [F(N)];
