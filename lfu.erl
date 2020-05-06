@@ -39,6 +39,11 @@
                 call(Event,Data);
             Event =:= count ->
                 call(Event,Data);
+            Event =:= cheat ->
+                case is_list(Data) of
+                    true -> cast(Event,Data);
+                    _ -> throw(must_be_list)
+                end;
             Event =:= fetch; Event =:= reset; Event =:= clean ->
                 case ets:info(Data) of
                     undefined -> throw(unknow_table);
@@ -132,6 +137,70 @@
                         ?SUPPORT andalso cast(?SECONDARY,point,K),
                         loop([O,Q])
                 end;
+            {cheat,KVL} ->
+                loop([O,length(lists:filter(
+                    fun({K,V}) when V =< ?MAX_ORDER ->
+                        case get(K) of
+                            undefined -> skip;
+                            C ->
+                                if
+                                    (C-1) div ?MAX_LIMIT == 0 ->
+                                        catch list_to_atom("o0" ++ integer_to_list((C-1) div ?MIN_LIMIT)) ! {reset,K};
+                                    true ->
+                                        catch list_to_atom("o" ++ integer_to_list((C-1) div ?MAX_LIMIT)) ! {reset,K}
+                                end,
+                                erase(K)
+                         end,
+                         if
+                             (V-1) div ?MAX_LIMIT == 0 ->
+                                 for(0,(V-1) div ?MIN_LIMIT,
+                                     fun(I) ->
+                                         N = list_to_atom("o0" ++ integer_to_list(I)),
+                                         case whereis(N) of
+                                             undefined ->
+                                                 register(N,spawn(fun() -> s_score_loop(I * ?MIN_LIMIT) end));
+                                             _ -> skip
+                                         end,
+                                         if
+                                             I == (V-1) div ?MIN_LIMIT ->
+                                                 catch N ! {cheat,{K,V}};
+                                             true -> skip
+                                         end
+                                     end
+                                 );
+                             true ->
+                                 for(0,(?MAX_LIMIT-1) div ?MIN_LIMIT,
+                                     fun(I) ->
+                                         N = list_to_atom("o0" ++ integer_to_list(I)),
+                                         case whereis(N) of
+                                             undefined ->
+                                                 register(N,spawn(fun() -> s_score_loop(I * ?MIN_LIMIT) end));
+                                             _ -> skip
+                                         end
+                                     end
+                                 ),
+                                 for(1,(V-1) div ?MAX_LIMIT,
+                                     fun(I) ->
+				         N = list_to_atom("o" ++ integer_to_list(I)),
+                                         case whereis(N) of
+                                             undefined ->
+                                                 register(N,spawn(fun() -> q_score_loop(I) end));
+                                             _ -> skip
+                                         end,
+                                         if
+                                             I == (V-1) div ?MAX_LIMIT ->
+                                                 catch N ! {point,K};
+                                             true -> skip
+                                         end
+                                     end
+                                 )
+                         end,
+                         put(K,V),
+                         true;
+                    (_) ->
+                         false
+                    end,
+                KVL))+Q]);
             {count,K,{Ref,PidS}} ->
                 catch PidS ! {{count,K,Ref},get(K)},
                 loop([O,Q]);
@@ -286,6 +355,9 @@
                         put(K,C+1),
                         s_score_loop(O)
                 end;
+            {cheat,{K,V}} ->
+                put(K,V),
+                s_score_loop(O);
             {reset,K} ->
                 erase(K),
                 s_score_loop(O);
