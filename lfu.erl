@@ -82,7 +82,7 @@
                         N = list_to_atom("o0" ++ integer_to_list(0)),
                         case whereis(N) of
                             undefined ->
-                                register(N,spawn(fun() -> s_score_loop(0) end)),
+                                register(N,spawn(fun() -> s_score_loop([0,0]) end)),
                                 catch N ! {point,K};
                             _ ->
                                 catch N ! {point,K}
@@ -100,7 +100,7 @@
                                         N = list_to_atom("o0" ++ integer_to_list(C div ?MIN_LIMIT)),
                                         case whereis(N) of
                                             undefined ->
-                                                register(N,spawn(fun() -> s_score_loop(C div ?MIN_LIMIT) end)),
+                                                register(N,spawn(fun() -> s_score_loop([C div ?MIN_LIMIT,0]) end)),
                                                 catch N ! {point,K};
                                             _ ->
                                                 catch N ! {point,K}
@@ -110,7 +110,7 @@
                                         N = list_to_atom("o0" ++ integer_to_list(C div ?MIN_LIMIT)),
                                         case whereis(N) of
                                             undefined ->
-                                                register(N,spawn(fun() -> s_score_loop(C div ?MIN_LIMIT) end)),
+                                                register(N,spawn(fun() -> s_score_loop([C div ?MIN_LIMIT,0]) end)),
                                                 catch N ! {point,K};
                                             _ ->
                                                 catch N ! {point,K}
@@ -122,7 +122,7 @@
                                 N = list_to_atom("o" ++ integer_to_list(C div ?MAX_LIMIT)),
                                 case whereis(N) of
                                     undefined ->
-                                        register(N,spawn(fun() -> q_score_loop(C div ?MAX_LIMIT) end)),
+                                        register(N,spawn(fun() -> q_score_loop([C div ?MAX_LIMIT,0]) end)),
                                         catch N ! {point,K};
                                     _ ->
                                         catch N ! {point,K}
@@ -158,7 +158,7 @@
                                          N = list_to_atom("o0" ++ integer_to_list(I)),
                                          case whereis(N) of
                                              undefined ->
-                                                 register(N,spawn(fun() -> s_score_loop(I * ?MIN_LIMIT) end));
+                                                 register(N,spawn(fun() -> s_score_loop([I * ?MIN_LIMIT,0]) end));
                                              _ -> skip
                                          end,
                                          if
@@ -174,7 +174,7 @@
                                          N = list_to_atom("o0" ++ integer_to_list(I)),
                                          case whereis(N) of
                                              undefined ->
-                                                 register(N,spawn(fun() -> s_score_loop(I * ?MIN_LIMIT) end));
+                                                 register(N,spawn(fun() -> s_score_loop([I * ?MIN_LIMIT,0]) end));
                                              _ -> skip
                                          end
                                      end
@@ -184,7 +184,7 @@
 				         N = list_to_atom("o" ++ integer_to_list(I)),
                                          case whereis(N) of
                                              undefined ->
-                                                 register(N,spawn(fun() -> q_score_loop(I) end));
+                                                 register(N,spawn(fun() -> q_score_loop([I,0]) end));
                                              _ -> skip
                                          end,
                                          if
@@ -324,47 +324,47 @@
         end.
 
 
-    q_score_loop(O) ->
+    q_score_loop([O,Q]) ->
         receive
             {point,K} ->
                 case get(K) of
                     undefined ->
                         put(K,1),
-                        q_score_loop(O);
+                        q_score_loop([O,Q+1]);
                     C ->
                         put(K,C+1),
-                        q_score_loop(O)
+                        q_score_loop([O,Q+1])
                 end;
             {reset,K} ->
                 erase(K),
-                q_score_loop(O);
+                q_score_loop([O,Q-1]);
             {score,{Ref,PidS}} ->
-                C = q_scoring(),
+                C = Q,
                 catch PidS ! {{score,Ref},C},
-                q_score_loop(O)
+                q_score_loop([O,Q])
         end.
 
-    s_score_loop(O) ->
+    s_score_loop([O,Q]) ->
         receive
             {point,K} ->
                 case get(K) of
                     undefined ->
                         put(K,?MIN_LIMIT*O+1),
-                        s_score_loop(O);
+                        s_score_loop([O,Q+1]);
                     C ->
                         put(K,C+1),
-                        s_score_loop(O)
+                        s_score_loop([O,Q+1])
                 end;
             {cheat,{K,V}} ->
                 put(K,V),
-                s_score_loop(O);
+                s_score_loop([O,Q+1]);
             {reset,K} ->
                 erase(K),
-                s_score_loop(O);
+                s_score_loop([O,Q-1]);
             {score,{Ref,PidS},{L,U}} ->
-                C = s_scoring(L,U),
+                C = if O > 0 orelse (L == ?MIN_LIMIT*O+1 andalso U == ?MIN_LIMIT*(O+1)) -> Q; true -> s_scoring(L,U) end,
                 catch PidS ! {{score,Ref},C},
-                s_score_loop(O)
+                s_score_loop([O,Q])
         end.
 
     q_scoring() ->
