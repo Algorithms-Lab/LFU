@@ -28,7 +28,10 @@
 
     event(Event) ->
         if
-            Event =:= state -> event(Event,[]);
+            Event =:= state ->
+                event(Event,[]);
+            Event =:= score ->
+                event(Event,[]);
             true -> throw(unknow_parameters)
         end.
     event(Event,Data) ->
@@ -36,6 +39,8 @@
             Event =:= point ->
                 cast(Event,Data);
             Event =:= state ->
+                call(Event,Data);
+            Event =:= score ->
                 call(Event,Data);
             Event =:= count ->
                 call(Event,Data);
@@ -207,6 +212,10 @@
             {state,Stub,{Ref,PidS}} ->
                 catch PidS ! {{state,Stub,Ref},[O,Q]},
                 loop([O,Q]);
+            {score,Stub,{Ref,PidS}} ->
+                NO = offset(O,Q,null,null),
+                catch PidS ! {{score,Stub,Ref},ready},
+                loop([NO,Q]);
             {fetch,TabID,{Ref,PidS}} ->
                 NO = offset(O,Q,null,null),
                 result(NO,TabID),
