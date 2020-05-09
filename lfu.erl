@@ -153,8 +153,7 @@
                                         catch list_to_atom("o0" ++ integer_to_list((C-1) div ?MIN_LIMIT)) ! {reset,K};
                                     true ->
                                         catch list_to_atom("o" ++ integer_to_list((C-1) div ?MAX_LIMIT)) ! {reset,K}
-                                end,
-                                erase(K)
+                                end
                          end,
                          if
                              (V-1) div ?MAX_LIMIT == 0 ->
@@ -200,8 +199,14 @@
                                      end
                                  )
                          end,
-                         put(K,V),
-                         true;
+                         case get(K) of
+                             undefined ->
+                                 put(K,V),
+                                 true;
+                             _ ->
+                                 put(K,V),
+                                 false
+                         end;
                     (_) ->
                          false
                     end,
