@@ -347,7 +347,7 @@
                         q_score_loop([O,Q+1]);
                     C ->
                         put(K,C+1),
-                        q_score_loop([O,Q+1])
+                        q_score_loop([O,Q])
                 end;
             {reset,K} ->
                 erase(K),
@@ -367,7 +367,7 @@
                         s_score_loop([O,Q+1]);
                     C ->
                         put(K,C+1),
-                        s_score_loop([O,Q+1])
+                        s_score_loop([O,Q])
                 end;
             {cheat,{K,V}} ->
                 put(K,V),
