@@ -156,61 +156,73 @@
                                 end
                          end,
                          if
-                             (V-1) div ?MAX_LIMIT == 0 ->
-                                 for(0,(V-1) div ?MIN_LIMIT,
-                                     fun(I) ->
-                                         N = list_to_atom("o0" ++ integer_to_list(I)),
-                                         case whereis(N) of
-                                             undefined ->
-                                                 register(N,spawn(fun() -> s_score_loop([I * ?MIN_LIMIT,0]) end));
-                                             _ -> skip
-                                         end,
-                                         if
-                                             I == (V-1) div ?MIN_LIMIT ->
-                                                 catch N ! {cheat,{K,V}};
-                                             true -> skip
-                                         end
-                                     end
-                                 );
-                             true ->
-                                 for(0,(?MAX_LIMIT-1) div ?MIN_LIMIT,
-                                     fun(I) ->
-                                         N = list_to_atom("o0" ++ integer_to_list(I)),
-                                         case whereis(N) of
-                                             undefined ->
-                                                 register(N,spawn(fun() -> s_score_loop([I * ?MIN_LIMIT,0]) end));
-                                             _ -> skip
-                                         end
-                                     end
-                                 ),
-                                 for(1,(V-1) div ?MAX_LIMIT,
-                                     fun(I) ->
-				         N = list_to_atom("o" ++ integer_to_list(I)),
-                                         case whereis(N) of
-                                             undefined ->
-                                                 register(N,spawn(fun() -> q_score_loop([I,0]) end));
-                                             _ -> skip
-                                         end,
-                                         if
-                                             I == (V-1) div ?MAX_LIMIT ->
-                                                 catch N ! {point,K};
-                                             true -> skip
-                                         end
-                                     end
-                                 )
+                             V > 0 ->
+                                 if
+                                     (V-1) div ?MAX_LIMIT == 0 ->
+                                         for(0,(V-1) div ?MIN_LIMIT,
+                                             fun(I) ->
+                                                 N = list_to_atom("o0" ++ integer_to_list(I)),
+                                                 case whereis(N) of
+                                                     undefined ->
+                                                         register(N,spawn(fun() -> s_score_loop([I * ?MIN_LIMIT,0]) end));
+                                                     _ -> skip
+                                                 end,
+                                                 if
+                                                     I == (V-1) div ?MIN_LIMIT ->
+                                                         catch N ! {cheat,{K,V}};
+                                                     true -> skip
+                                                 end
+                                             end
+                                         );
+                                     true ->
+                                         for(0,(?MAX_LIMIT-1) div ?MIN_LIMIT,
+                                             fun(I) ->
+                                                 N = list_to_atom("o0" ++ integer_to_list(I)),
+                                                 case whereis(N) of
+                                                     undefined ->
+                                                         register(N,spawn(fun() -> s_score_loop([I * ?MIN_LIMIT,0]) end));
+                                                     _ -> skip
+                                                 end
+                                             end
+                                         ),
+                                         for(1,(V-1) div ?MAX_LIMIT,
+                                             fun(I) ->
+				                 N = list_to_atom("o" ++ integer_to_list(I)),
+                                                 case whereis(N) of
+                                                     undefined ->
+                                                         register(N,spawn(fun() -> q_score_loop([I,0]) end));
+                                                     _ -> skip
+                                                 end,
+                                                 if
+                                                     I == (V-1) div ?MAX_LIMIT ->
+                                                         catch N ! {point,K};
+                                                     true -> skip
+                                                 end
+                                             end
+                                         )
+                                 end;
+                             true -> skip
                          end,
+                         put(clean,0),
                          case get(K) of
                              undefined ->
-                                 put(K,V),
-                                 true;
+                                 if
+                                     V > 0 ->
+                                         put(K,V),true;
+                                     true -> false
+                                 end;
                              _ ->
-                                 put(K,V),
-                                 false
+                                 if
+                                     V > 0 ->
+                                         put(K,V),false;
+                                     true ->
+                                         erase(K),put(clean,get(clean)+1),false
+                                 end
                          end;
                     (_) ->
                          false
                     end,
-                KVL))+Q]);
+                KVL))+Q-erase(clean)]);
             {count,K,{Ref,PidS}} ->
                 catch PidS ! {{count,K,Ref},get(K)},
                 loop([O,Q]);
