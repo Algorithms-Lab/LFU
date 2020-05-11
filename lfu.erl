@@ -164,7 +164,7 @@
                                                  N = list_to_atom("o0" ++ integer_to_list(I)),
                                                  case whereis(N) of
                                                      undefined ->
-                                                         register(N,spawn(fun() -> s_score_loop([I * ?MIN_LIMIT,0]) end));
+                                                         register(N,spawn(fun() -> s_score_loop([I,0]) end));
                                                      _ -> skip
                                                  end,
                                                  if
@@ -180,7 +180,7 @@
                                                  N = list_to_atom("o0" ++ integer_to_list(I)),
                                                  case whereis(N) of
                                                      undefined ->
-                                                         register(N,spawn(fun() -> s_score_loop([I * ?MIN_LIMIT,0]) end));
+                                                         register(N,spawn(fun() -> s_score_loop([I,0]) end));
                                                      _ -> skip
                                                  end
                                              end
