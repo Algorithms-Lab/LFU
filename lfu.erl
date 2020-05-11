@@ -265,7 +265,7 @@
         end.
 
     counting(L,O) ->
-        put(counter,0),
+        put(counter,0.0),
         Ref = make_ref(),
         if
             O =< ?MAX_LIMIT ->
@@ -334,7 +334,7 @@
                     end
                 )),Ref)
         end,
-        erase(counter).
+        list_to_integer(float_to_list(erase(counter),[{decimals,0}])).
 
     count_loop(O,R) ->
         if
@@ -394,12 +394,12 @@
         end.
 
     q_scoring() ->
-        put(counter,0),
+        put(counter,0.0),
         put(counter,get(counter) + length(get_keys(1))),
         get(counter).
 
     s_scoring(L,U) ->
-        put(counter,0),
+        put(counter,0.0),
         for(L,U,fun(I) -> put(counter,get(counter) + length(get_keys(I))) end),
         get(counter).
 
