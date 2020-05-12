@@ -235,7 +235,7 @@
                 loop([NO,Q]);
             {fetch,TabID,{Ref,PidS}} ->
                 NO = offset(O,Q,null,null,null),
-                result(NO,TabID),
+                collect(NO,TabID),
                 catch PidS ! {{fetch,TabID,Ref},ready},
                 loop([NO,Q]);
             {reset,TabID,{Ref,PidS}} ->
@@ -244,7 +244,7 @@
                 loop([O,NQ]);
             {clean,TabID,{Ref,PidS}} ->
                 NO = offset(O,Q,null,null,null),
-                result(NO,TabID),
+                collect(NO,TabID),
                 NQ = reset(TabID,Q),
                 ?SUPPORT andalso call(?SECONDARY,reset,TabID),
                 catch PidS ! {{clean,TabID,Ref},ready},
@@ -294,7 +294,7 @@
                     fun(I) ->
                         case whereis(list_to_atom("o0" ++ integer_to_list(I))) of undefined -> false; _ -> true end
                     end
-                )),Ref);
+                )),Ref,score);
             true ->
                 for(L div ?MIN_LIMIT,(?MAX_LIMIT-1) div ?MIN_LIMIT,
                     fun(I) ->
@@ -321,7 +321,7 @@
                     fun(I) ->
                         case whereis(list_to_atom("o0" ++ integer_to_list(I))) of undefined -> false; _ -> true end
                     end
-                )),Ref),
+                )),Ref,score),
 
                 for(if L div ?MAX_LIMIT > 0 -> L div ?MAX_LIMIT; true -> 1 end,O div ?MAX_LIMIT - 1,
                     fun(I) ->
@@ -332,17 +332,19 @@
                     fun(I) ->
                         case whereis(list_to_atom("o" ++ integer_to_list(I))) of undefined -> false; _ -> true end
                     end
-                )),Ref)
+                )),Ref,score)
         end,
         list_to_integer(float_to_list(erase(counter),[{decimals,0}])).
 
-    count_loop(O,R) ->
+    count_loop(O,R,C) ->
         if
             O > 0 ->
                 receive
                     {{C,R},Reply} when C =:= score ->
                         put(counter,get(counter)+Reply),
-                        if O > 1 -> count_loop(O-1,R); true -> "skip" end
+                        if O > 1 -> count_loop(O-1,R,C); true -> "skip" end;
+                    {{C,R},ready} when C =:= fetch ->
+                        if O > 1 -> count_loop(O-1,R,C); true -> "skip" end
                 after ?TIMEOUT ->
                     "skip"
                 end;
@@ -367,6 +369,10 @@
             {score,{Ref,PidS}} ->
                 C = Q,
                 catch PidS ! {{score,Ref},C},
+                q_score_loop([O,Q]);
+            {fetch,{Ref,PidS},TabID} ->
+                q_insert(O,TabID),
+                catch PidS ! {{fetch,Ref},ready},
                 q_score_loop([O,Q])
         end.
 
@@ -390,6 +396,10 @@
             {score,{Ref,PidS},{L,U}} ->
                 C = if O > 0 orelse (L == ?MIN_LIMIT*O+1 andalso U == ?MIN_LIMIT*(O+1)) -> Q; true -> s_scoring(L,U) end,
                 catch PidS ! {{score,Ref},C},
+                s_score_loop([O,Q]);
+            {fetch,{Ref,PidS},{TabID,L,U}} ->
+                s_insert(L,U,TabID),
+                catch PidS ! {{fetch,Ref},ready},
                 s_score_loop([O,Q])
         end.
 
@@ -403,6 +413,11 @@
         for(L,U,fun(I) -> put(counter,get(counter) + length(get_keys(I))) end),
         get(counter).
 
+    q_insert(I,TabID) ->
+        case get_keys(1) of [] -> 1; KL -> ets:insert(TabID,{I*?MAX_LIMIT,KL}) end.
+
+    s_insert(L,U,TabID) ->
+        for(L,U,fun(I) -> case get_keys(I) of [] -> 1; KL -> ets:insert(TabID,{I,KL}) end end).
 
     reset(TabID,Q) ->
         TL = case ets:info(TabID) of
@@ -431,9 +446,70 @@
         Q - erase(reset).
 
 
-    result(O,TabID) ->
-        for(1,O*10,fun(I) -> case get_keys(I) of [] -> 1; KL -> ets:insert(TabID,{I,KL}) end end).
+    collect(O,TabID) ->
+        Ref = make_ref(),
+        if
+            (O*10-1) div ?MAX_LIMIT == 0 ->
+                for(0,(O*10-1) div ?MIN_LIMIT,
+                    fun(I) ->
+                        N = list_to_atom("o0" ++ integer_to_list(I)),
+                        case whereis(N) of
+                            undefined -> skip;
+                            _ ->
+                                catch N ! {fetch,{Ref,self()},{TabID,?MIN_LIMIT*I+1,
+                                    if
+                                        O*10 >= ?MIN_LIMIT*(I+1) ->
+                                            ?MIN_LIMIT*(I+1);
+                                        true -> O
+                                    end
+                                }}
+                        end
+                    end
+                ),
+                count_loop(length(grep(foreach(0,(O*10-1) div ?MIN_LIMIT,fun(I) -> I end),
+                    fun(I) ->
+                        case whereis(list_to_atom("o0" ++ integer_to_list(I))) of undefined -> false; _ -> true end
+                    end
+                )),Ref,fetch);
+            true ->
+                for(0,(?MAX_LIMIT-1) div ?MIN_LIMIT,
+                    fun(I) ->
+                        N = list_to_atom("o0" ++ integer_to_list(I)),
+                        case whereis(N) of
+                            undefined -> skip;
+                            _ ->
+                                catch N ! {fetch,{Ref,self()},{TabID,?MIN_LIMIT*I+1,
+                                    if
+                                        O*10 >= ?MIN_LIMIT*(I+1) ->
+                                            ?MIN_LIMIT*(I+1);
+                                        true ->	O %% never hit in this branch
+                                    end
+                                }}
+                        end
+                    end
+                ),
+                count_loop(length(grep(foreach(0,(?MAX_LIMIT-1) div ?MIN_LIMIT,fun(I) -> I end),
+                    fun(I) ->
+                        case whereis(list_to_atom("o0" ++ integer_to_list(I))) of undefined -> false; _ -> true end
+                    end
+                )),Ref,fetch),
 
+                for(1,(O*10-1) div ?MAX_LIMIT,
+                    fun(I) ->
+                        N = list_to_atom("o" ++ integer_to_list(I)),
+                        case whereis(N) of
+                            undefined -> skip;
+                            _ ->
+                                catch N ! {fetch,{Ref,self()},TabID}
+                        end
+                    end
+                ),
+                count_loop(length(grep(foreach(1,(O*10-1) div ?MAX_LIMIT,fun(I) -> I end),
+                    fun(I) ->
+                        case whereis(list_to_atom("o" ++ integer_to_list(I))) of undefined -> false; _ -> true end
+                    end
+                )),Ref,fetch)
+        end.
 
     foreach(N,N,F) -> [F(N)];
     foreach(I,N,_) when I > N -> [];
