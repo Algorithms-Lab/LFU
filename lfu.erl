@@ -460,7 +460,7 @@
                                     if
                                         O*10 >= ?MIN_LIMIT*(I+1) ->
                                             ?MIN_LIMIT*(I+1);
-                                        true -> O
+                                        true -> O*10
                                     end
                                 }}
                         end
@@ -482,7 +482,7 @@
                                     if
                                         O*10 >= ?MIN_LIMIT*(I+1) ->
                                             ?MIN_LIMIT*(I+1);
-                                        true ->	O %% never hit in this branch
+                                        true ->	O*10 %% never hit in this branch
                                     end
                                 }}
                         end
