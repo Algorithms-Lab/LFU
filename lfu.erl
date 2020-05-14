@@ -371,7 +371,7 @@
                 catch PidS ! {{score,Ref},C},
                 q_score_loop([O,Q]);
             {fetch,{Ref,PidS},TabID} ->
-                q_insert(O,TabID),
+                if Q > 0 -> q_insert(O,TabID); true -> skip end,
                 catch PidS ! {{fetch,Ref},ready},
                 q_score_loop([O,Q])
         end.
@@ -398,7 +398,7 @@
                 catch PidS ! {{score,Ref},C},
                 s_score_loop([O,Q]);
             {fetch,{Ref,PidS},{TabID,L,U}} ->
-                s_insert(L,U,TabID),
+                if Q > 0 -> s_insert(L,U,TabID); true -> skip end,
                 catch PidS ! {{fetch,Ref},ready},
                 s_score_loop([O,Q])
         end.
