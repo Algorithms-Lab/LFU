@@ -95,7 +95,7 @@
                         put(K,1),
                         ?SUPPORT andalso cast(?SECONDARY,point,K),
                         loop([O,Q+1]);
-                    C ->
+                    C when C < ?MAX_ORDER ->
                         if
                             %% before MAX LIMIT
                             C div ?MAX_LIMIT == 0 ->
@@ -139,6 +139,9 @@
                             true -> skip
                         end,
                         put(K,C+1),
+                        ?SUPPORT andalso cast(?SECONDARY,point,K),
+                        loop([O,Q]);
+                    _ ->
                         ?SUPPORT andalso cast(?SECONDARY,point,K),
                         loop([O,Q])
                 end;
@@ -403,10 +406,6 @@
                 s_score_loop([O,Q])
         end.
 
-    q_scoring() ->
-        put(counter,0.0),
-        put(counter,get(counter) + length(get_keys(1))),
-        get(counter).
 
     s_scoring(L,U) ->
         put(counter,0.0),
@@ -521,8 +520,3 @@
 
     grep([H|T],F) -> case F(H) of true -> [H|grep(T,F)]; false -> grep(T,F) end;
     grep([],_) -> [].
-
-    sleep(T) ->
-        receive
-            after T -> true
-        end.
