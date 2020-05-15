@@ -95,7 +95,7 @@
                         put(K,1),
                         ?SUPPORT andalso cast(?SECONDARY,point,K),
                         loop([O,Q+1]);
-                    C ->
+                    C when C < ?MAX_ORDER ->
                         if
                             %% before MAX LIMIT
                             C div ?MAX_LIMIT == 0 ->
@@ -139,6 +139,9 @@
                             true -> skip
                         end,
                         put(K,C+1),
+                        ?SUPPORT andalso cast(?SECONDARY,point,K),
+                        loop([O,Q]);
+                    _ ->
                         ?SUPPORT andalso cast(?SECONDARY,point,K),
                         loop([O,Q])
                 end;
