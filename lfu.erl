@@ -524,8 +524,3 @@
 
     grep([H|T],F) -> case F(H) of true -> [H|grep(T,F)]; false -> grep(T,F) end;
     grep([],_) -> [].
-
-    sleep(T) ->
-        receive
-            after T -> true
-        end.
