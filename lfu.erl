@@ -406,10 +406,6 @@
                 s_score_loop([O,Q])
         end.
 
-    q_scoring() ->
-        put(counter,0.0),
-        put(counter,get(counter) + length(get_keys(1))),
-        get(counter).
 
     s_scoring(L,U) ->
         put(counter,0.0),
