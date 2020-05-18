@@ -14,6 +14,7 @@
 -define(MIN_ORDER,100).
 -define(MIN_OFFSET,10).			%% low limit for step to next rank
 -define(MAX_OFFSET,30).			%% up limit for step to prev rank
+-define(SCORE_OFFSET,0).		%% must be less than ?MIN_ORDER && for example if it`s necessary begin score from 100 then need setting to 99
 -define(TIMEOUT,90000).
 
 -ifdef(support).
@@ -94,7 +95,7 @@
                         end,
                         put(K,1),
                         ?SUPPORT andalso cast(?SECONDARY,point,K),
-                        loop([O,Q+1]);
+                        loop([O,if ?SCORE_OFFSET == 0 -> Q+1; true -> Q end]);
                     C when C < ?MAX_ORDER ->
                         if
                             %% before MAX LIMIT
@@ -140,7 +141,7 @@
                         end,
                         put(K,C+1),
                         ?SUPPORT andalso cast(?SECONDARY,point,K),
-                        loop([O,Q]);
+                        loop([O,if (C+1) / (?SCORE_OFFSET+1) == 1 -> Q+1; true -> Q end]);
                     _ ->
                         ?SUPPORT andalso cast(?SECONDARY,point,K),
                         loop([O,Q])
@@ -211,15 +212,28 @@
                              undefined ->
                                  if
                                      V > 0 ->
-                                         put(K,V),true;
+                                         put(K,V),
+                                         if
+                                             V > ?SCORE_OFFSET -> true;
+                                             true -> false
+                                         end;
                                      true -> false
                                  end;
-                             _ ->
+                             OV ->
                                  if
                                      V > 0 ->
-                                         put(K,V),false;
+                                         put(K,V),
+                                         if
+                                             OV =< ?SCORE_OFFSET andalso V > ?SCORE_OFFSET -> true;
+                                             true -> false
+                                         end;
                                      true ->
-                                         erase(K),put(clean,get(clean)+1),false
+                                         if
+                                             OV > ?SCORE_OFFSET ->
+                                                 erase(K),put(clean,get(clean)+1),false;
+                                             true ->
+                                                 erase(K),false
+                                         end
                                  end
                          end;
                     (_) ->
@@ -256,7 +270,7 @@
 
 
     offset(O,Q,P0,C0,F0) ->
-        P = if P0 =/= null -> P0; true -> counting(0,O) end,
+        P = if P0 =/= null -> P0; true -> counting(?SCORE_OFFSET,O) end,
         C = if C0 =/= null -> C0; true -> counting(O,O*10) + P end,
         F = if F0 =/= null -> F0; true -> counting(O*10,O*100) + C end,
         io:format("P:~p~nC:~p~nF:~p~nO:~p~nQ~p~n",[P,C,F,O,Q]),
@@ -385,14 +399,29 @@
                 case get(K) of
                     undefined ->
                         put(K,?MIN_LIMIT*O+1),
-                        s_score_loop([O,Q+1]);
+                        if
+                            ?SCORE_OFFSET == 0 ->
+                                s_score_loop([O,Q+1]);
+                            true ->
+                                s_score_loop([O,Q])
+                        end;
                     C ->
                         put(K,C+1),
-                        s_score_loop([O,Q])
+                        if
+                            (C+1) / (?SCORE_OFFSET+1) == 1 ->
+                                s_score_loop([O,Q+1]);
+                            true ->
+                                s_score_loop([O,Q])
+                        end
                 end;
             {cheat,{K,V}} ->
                 put(K,V),
-                s_score_loop([O,Q+1]);
+                if
+                    V > ?SCORE_OFFSET ->
+                        s_score_loop([O,Q+1]);
+                    true ->
+                        s_score_loop([O,Q])
+                end;
             {reset,K} ->
                 erase(K),
                 s_score_loop([O,Q-1]);
@@ -455,7 +484,12 @@
                         case whereis(N) of
                             undefined -> skip;
                             _ ->
-                                catch N ! {fetch,{Ref,self()},{TabID,?MIN_LIMIT*I+1,
+                                catch N ! {fetch,{Ref,self()},{TabID,
+                                    if
+                                        I == 0 ->
+                                            ?SCORE_OFFSET+1;
+                                        true -> ?MIN_LIMIT*I+1
+                                    end,
                                     if
                                         O*10 >= ?MIN_LIMIT*(I+1) ->
                                             ?MIN_LIMIT*(I+1);
@@ -477,7 +511,12 @@
                         case whereis(N) of
                             undefined -> skip;
                             _ ->
-                                catch N ! {fetch,{Ref,self()},{TabID,?MIN_LIMIT*I+1,
+                                catch N ! {fetch,{Ref,self()},{TabID,
+                                    if
+                                        I == 0 ->
+                                            ?SCORE_OFFSET+1;
+                                        true -> ?MIN_LIMIT*I+1
+                                    end,
                                     if
                                         O*10 >= ?MIN_LIMIT*(I+1) ->
                                             ?MIN_LIMIT*(I+1);
