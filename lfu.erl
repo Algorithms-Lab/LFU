@@ -262,10 +262,19 @@
             {clean,TabID,{Ref,PidS}} ->
                 NO = offset(O,Q,null,null,null),
                 collect(NO,TabID),
+                catch PidS ! {{clean,TabID,Ref},ready},
+                clean_loop([NO,Q,TabID])
+        end.
+
+    clean_loop([O,Q,TabID]) ->
+        receive
+            {apply,TabID,{Ref,PidS}} ->
                 NQ = reset(TabID,Q),
                 ?SUPPORT andalso call(?SECONDARY,reset,TabID),
-                catch PidS ! {{clean,TabID,Ref},ready},
-                loop([NO,NQ])
+                catch PidS ! {{apply,TabID,Ref},ready},
+                loop([O,NQ])
+        after ?TIMEOUT ->
+            loop([O,Q])
         end.
 
 
