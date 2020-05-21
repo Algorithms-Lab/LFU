@@ -259,6 +259,9 @@
                 NQ = reset(TabID,Q),
                 catch PidS ! {{reset,TabID,Ref},ready},
                 loop([O,NQ]);
+            {reset,TabID} ->
+                NQ = reset(TabID,Q),
+                loop([O,NQ]);
             {clean,TabID,{Ref,PidS}} ->
                 NO = offset(O,Q,null,null,null),
                 collect(NO,TabID),
@@ -268,6 +271,10 @@
 
     clean_loop([O,Q,TabID]) ->
         receive
+            {apply,TabID} ->
+                NQ = reset(TabID,Q),
+                ?SUPPORT andalso cast(?SECONDARY,reset,TabID),
+                loop([O,NQ]);
             {apply,TabID,{Ref,PidS}} ->
                 NQ = reset(TabID,Q),
                 ?SUPPORT andalso call(?SECONDARY,reset,TabID),
