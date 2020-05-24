@@ -15,7 +15,7 @@
 -define(MIN_OFFSET,10).			%% low limit for step to next rank
 -define(MAX_OFFSET,30).			%% up limit for step to prev rank
 -define(SCORE_OFFSET,0).		%% must be less than ?MIN_ORDER && for example if it`s necessary begin score from 100 then need setting to 99
--define(TIMEOUT,90000).
+-define(TIMEOUT,10000).
 
 -ifdef(support).
     -define(SUPPORT,true).
