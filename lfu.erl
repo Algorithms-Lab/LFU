@@ -252,7 +252,7 @@
                 loop([NO,Q]);
             {fetch,TabID,{Ref,PidS}} ->
                 NO = offset(O,Q,null,null,null),
-                collect(NO,TabID),
+                collect(NO*10,TabID),
                 catch PidS ! {{fetch,TabID,Ref},ready},
                 loop([NO,Q]);
             {reset,TabID,{Ref,PidS}} ->
@@ -264,7 +264,7 @@
                 loop([O,NQ]);
             {clean,TabID,{Ref,PidS}} ->
                 NO = offset(O,Q,null,null,null),
-                collect(NO,TabID),
+                collect(NO*10,TabID),
                 catch PidS ! {{clean,TabID,Ref},ready},
                 clean_loop([NO,Q,TabID])
         end.
@@ -493,8 +493,8 @@
     collect(O,TabID) ->
         Ref = make_ref(),
         if
-            (O*10-1) div ?MAX_LIMIT == 0 ->
-                for(0,(O*10-1) div ?MIN_LIMIT,
+            (O-1) div ?MAX_LIMIT == 0 ->
+                for(0,(O-1) div ?MIN_LIMIT,
                     fun(I) ->
                         N = list_to_atom("o0" ++ integer_to_list(I)),
                         case whereis(N) of
@@ -507,15 +507,15 @@
                                         true -> ?MIN_LIMIT*I+1
                                     end,
                                     if
-                                        O*10 >= ?MIN_LIMIT*(I+1) ->
+                                        O >= ?MIN_LIMIT*(I+1) ->
                                             ?MIN_LIMIT*(I+1);
-                                        true -> O*10
+                                        true -> O
                                     end
                                 }}
                         end
                     end
                 ),
-                count_loop(length(grep(foreach(0,(O*10-1) div ?MIN_LIMIT,fun(I) -> I end),
+                count_loop(length(grep(foreach(0,(O-1) div ?MIN_LIMIT,fun(I) -> I end),
                     fun(I) ->
                         case whereis(list_to_atom("o0" ++ integer_to_list(I))) of undefined -> false; _ -> true end
                     end
@@ -534,9 +534,9 @@
                                         true -> ?MIN_LIMIT*I+1
                                     end,
                                     if
-                                        O*10 >= ?MIN_LIMIT*(I+1) ->
+                                        O >= ?MIN_LIMIT*(I+1) ->
                                             ?MIN_LIMIT*(I+1);
-                                        true ->	O*10 %% never hit in this branch
+                                        true ->	O %% never hit in this branch
                                     end
                                 }}
                         end
@@ -548,7 +548,7 @@
                     end
                 )),Ref,fetch),
 
-                for(1,(O*10-1) div ?MAX_LIMIT,
+                for(1,(O-1) div ?MAX_LIMIT,
                     fun(I) ->
                         N = list_to_atom("o" ++ integer_to_list(I)),
                         case whereis(N) of
@@ -558,7 +558,7 @@
                         end
                     end
                 ),
-                count_loop(length(grep(foreach(1,(O*10-1) div ?MAX_LIMIT,fun(I) -> I end),
+                count_loop(length(grep(foreach(1,(O-1) div ?MAX_LIMIT,fun(I) -> I end),
                     fun(I) ->
                         case whereis(list_to_atom("o" ++ integer_to_list(I))) of undefined -> false; _ -> true end
                     end
