@@ -439,8 +439,13 @@
                         s_score_loop([O,Q])
                 end;
             {reset,K} ->
-                erase(K),
-                s_score_loop([O,Q-1]);
+                V = erase(K),
+                if
+                    V > ?SCORE_OFFSET ->
+                        s_score_loop([O,Q-1]);
+                    true ->
+                        s_score_loop([O,Q])
+                end;
             {score,{Ref,PidS},{L,U}} ->
                 C = if O > 0 orelse (L == ?SCORE_OFFSET+1 andalso U == ?MIN_LIMIT*(O+1)) -> Q; true -> s_scoring(L,U) end,
                 catch PidS ! {{score,Ref},C},
