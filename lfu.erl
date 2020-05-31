@@ -515,7 +515,7 @@
                                         true -> ?MIN_LIMIT*I+1
                                     end,
                                     if
-                                        O >= ?MIN_LIMIT*(I+1) ->
+                                        O > ?MIN_LIMIT*(I+1) ->
                                             ?MIN_LIMIT*(I+1);
                                         true -> O
                                     end
@@ -542,7 +542,7 @@
                                         true -> ?MIN_LIMIT*I+1
                                     end,
                                     if
-                                        O >= ?MIN_LIMIT*(I+1) ->
+                                        O > ?MIN_LIMIT*(I+1) ->
                                             ?MIN_LIMIT*(I+1);
                                         true ->	O %% never hit in this branch
                                     end
