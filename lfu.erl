@@ -207,7 +207,10 @@
                                  end;
                              true -> skip
                          end,
-                         put(clean,0),
+                         case get(clean) of
+                             undefined -> put(clean,0);
+                             _ -> skip
+                         end,
                          case get(K) of
                              undefined ->
                                  if
