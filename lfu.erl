@@ -299,9 +299,9 @@
 
 
     offset(O,Q,P0,C0,F0) ->
-        P = if P0 =/= null -> P0; true -> counting(?SCORE_OFFSET,O) end,
-        C = if C0 =/= null -> C0; true -> counting(O,O*10) + P end,
-        F = if F0 =/= null -> F0; true -> counting(O*10,O*100) + C end,
+        P = if P0 =/= null -> P0; true -> count(?SCORE_OFFSET,O) end,
+        C = if C0 =/= null -> C0; true -> count(O,O*10) + P end,
+        F = if F0 =/= null -> F0; true -> count(O*10,O*100) + C end,
         io:format("P:~p~nC:~p~nF:~p~nO:~p~nQ~p~n",[P,C,F,O,Q]),
         if
             Q < 1 -> O;
@@ -310,7 +310,7 @@
             true -> O
         end.
 
-    counting(L,U) ->
+    count(L,U) ->
         put(counter,0.0),
         Ref = make_ref(),
         if
