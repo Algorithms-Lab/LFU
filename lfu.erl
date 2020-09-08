@@ -15,7 +15,8 @@
 -define(MIN_OFFSET,10).			%% low limit for step to next rank
 -define(MAX_OFFSET,30).			%% up limit for step to prev rank
 -define(SCORE_OFFSET,0).		%% must be less than ?MIN_ORDER && for example if it`s necessary begin score from 100 then need setting to 99
--define(TIMEOUT,10000).
+-define(TIMEOUT_CLEAN,30000).
+-define(TIMEOUT_COUNT,10000).
 
 -ifdef(support).
     -define(SUPPORT,true).
@@ -49,6 +50,11 @@
                 case is_list(Data) of
                     true -> cast(Event,Data);
                     _ -> throw(must_be_list)
+                end;
+            Event =:= apply ->
+                case ets:info(Data) of
+                    undefined -> throw(unknow_table);
+                    _ -> cast(Event,Data)
                 end;
             Event =:= fetch; Event =:= reset; Event =:= clean ->
                 case ets:info(Data) of
@@ -269,7 +275,11 @@
                 NO = offset(O,Q,null,null,null),
                 collect(NO*10,TabID),
                 catch PidS ! {{clean,TabID,Ref},ready},
-                clean_loop([NO,Q,TabID])
+                clean_loop([NO,Q,TabID]);
+            {apply,_TabID} ->
+                loop([O,Q]);
+            {apply,_TabID,{_Ref,_PidID}} ->
+                loop([O,Q])
         end.
 
     clean_loop([O,Q,TabID]) ->
@@ -283,7 +293,7 @@
                 ?SUPPORT andalso call(?SECONDARY,reset,TabID),
                 catch PidS ! {{apply,TabID,Ref},ready},
                 loop([O,NQ])
-        after ?TIMEOUT ->
+        after ?TIMEOUT_CLEAN ->
             loop([O,Q])
         end.
 
@@ -398,7 +408,7 @@
                         if Q > 1 -> count_loop([Q-1,R,C]); true -> "skip" end;
                     {{C,R},ready} when C =:= fetch ->
                         if Q > 1 -> count_loop([Q-1,R,C]); true -> "skip" end
-                after ?TIMEOUT ->
+                after ?TIMEOUT_COUNT ->
                     "skip"
                 end;
             true -> "skip"
