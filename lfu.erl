@@ -337,11 +337,11 @@
                         end
                     end
                 ),
-                count_loop(length(grep(foreach(L div ?MIN_LIMIT,(U-1) div ?MIN_LIMIT,fun(I) -> I end),
+                count_loop([length(grep(foreach(L div ?MIN_LIMIT,(U-1) div ?MIN_LIMIT,fun(I) -> I end),
                     fun(I) ->
                         case whereis(list_to_atom("o0" ++ integer_to_list(I))) of undefined -> false; _ -> true end
                     end
-                )),Ref,score);
+                )),Ref,score]);
             true ->
                 for(L div ?MIN_LIMIT,(?MAX_LIMIT-1) div ?MIN_LIMIT,
                     fun(I) ->
@@ -370,34 +370,34 @@
                         end
                     end
                 ),
-                count_loop(length(grep(foreach(L div ?MIN_LIMIT,(?MAX_LIMIT-1) div ?MIN_LIMIT,fun(I) -> I end),
+                count_loop([length(grep(foreach(L div ?MIN_LIMIT,(?MAX_LIMIT-1) div ?MIN_LIMIT,fun(I) -> I end),
                     fun(I) ->
                         case whereis(list_to_atom("o0" ++ integer_to_list(I))) of undefined -> false; _ -> true end
                     end
-                )),Ref,score),
+                )),Ref,score]),
 
                 for(if L div ?MAX_LIMIT > 0 -> L div ?MAX_LIMIT; true -> 1 end,U div ?MAX_LIMIT - 1,
                     fun(I) ->
                         case whereis(list_to_atom("o" ++ integer_to_list(I))) of undefined -> "skip"; N -> catch N ! {score,{Ref,self()}} end
                     end
                 ),
-                count_loop(length(grep(foreach(if L div ?MAX_LIMIT > 0 -> L div ?MAX_LIMIT; true -> 1 end,U div ?MAX_LIMIT - 1,fun(I) -> I end),
+                count_loop([length(grep(foreach(if L div ?MAX_LIMIT > 0 -> L div ?MAX_LIMIT; true -> 1 end,U div ?MAX_LIMIT - 1,fun(I) -> I end),
                     fun(I) ->
                         case whereis(list_to_atom("o" ++ integer_to_list(I))) of undefined -> false; _ -> true end
                     end
-                )),Ref,score)
+                )),Ref,score])
         end,
         list_to_integer(float_to_list(erase(counter),[{decimals,0}])).
 
-    count_loop(Q,R,C) ->
+    count_loop([Q,R,C]) ->
         if
             Q > 0 ->
                 receive
                     {{C,R},Reply} when C =:= score ->
                         put(counter,get(counter)+Reply),
-                        if Q > 1 -> count_loop(Q-1,R,C); true -> "skip" end;
+                        if Q > 1 -> count_loop([Q-1,R,C]); true -> "skip" end;
                     {{C,R},ready} when C =:= fetch ->
-                        if Q > 1 -> count_loop(Q-1,R,C); true -> "skip" end
+                        if Q > 1 -> count_loop([Q-1,R,C]); true -> "skip" end
                 after ?TIMEOUT ->
                     "skip"
                 end;
@@ -540,11 +540,11 @@
                         end
                     end
                 ),
-                count_loop(length(grep(foreach(0,(O-1) div ?MIN_LIMIT,fun(I) -> I end),
+                count_loop([length(grep(foreach(0,(O-1) div ?MIN_LIMIT,fun(I) -> I end),
                     fun(I) ->
                         case whereis(list_to_atom("o0" ++ integer_to_list(I))) of undefined -> false; _ -> true end
                     end
-                )),Ref,fetch);
+                )),Ref,fetch]);
             true ->
                 for(0,(?MAX_LIMIT-1) div ?MIN_LIMIT,
                     fun(I) ->
@@ -567,11 +567,11 @@
                         end
                     end
                 ),
-                count_loop(length(grep(foreach(0,(?MAX_LIMIT-1) div ?MIN_LIMIT,fun(I) -> I end),
+                count_loop([length(grep(foreach(0,(?MAX_LIMIT-1) div ?MIN_LIMIT,fun(I) -> I end),
                     fun(I) ->
                         case whereis(list_to_atom("o0" ++ integer_to_list(I))) of undefined -> false; _ -> true end
                     end
-                )),Ref,fetch),
+                )),Ref,fetch]),
 
                 for(1,(O-1) div ?MAX_LIMIT,
                     fun(I) ->
@@ -583,11 +583,11 @@
                         end
                     end
                 ),
-                count_loop(length(grep(foreach(1,(O-1) div ?MAX_LIMIT,fun(I) -> I end),
+                count_loop([length(grep(foreach(1,(O-1) div ?MAX_LIMIT,fun(I) -> I end),
                     fun(I) ->
                         case whereis(list_to_atom("o" ++ integer_to_list(I))) of undefined -> false; _ -> true end
                     end
-                )),Ref,fetch)
+                )),Ref,fetch])
         end.
 
     foreach(N,N,F) -> [F(N)];
