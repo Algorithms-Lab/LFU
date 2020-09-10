@@ -231,49 +231,49 @@
                          false
                     end,
                 KVL))+Q-erase(clean)]);
-            {count,K,{Ref,PidS}} ->
-                catch PidS ! {{count,K,Ref},get(K)},
+            {count,K,{Ref,Pid}} ->
+                catch Pid ! {{count,K,Ref},get(K)},
                 loop([O,Q]);
-            {state,Stub,{Ref,PidS}} ->
-                catch PidS ! {{state,Stub,Ref},[O,Q]},
+            {state,Stub,{Ref,Pid}} ->
+                catch Pid ! {{state,Stub,Ref},[O,Q]},
                 loop([O,Q]);
-            {score,Stub,{Ref,PidS}} ->
+            {score,Stub,{Ref,Pid}} ->
                 NO = offset(O,Q,null,null,null),
-                catch PidS ! {{score,Stub,Ref},ready},
+                catch Pid ! {{score,Stub,Ref},ready},
                 loop([NO,Q]);
-            {fetch,TabID,{Ref,PidS}} ->
+            {fetch,TID,{Ref,Pid}} ->
                 NO = offset(O,Q,null,null,null),
-                collect(NO*10,TabID),
-                catch PidS ! {{fetch,TabID,Ref},ready},
+                collect(NO*10,TID),
+                catch Pid ! {{fetch,TID,Ref},ready},
                 loop([NO,Q]);
-            {reset,TabID,{Ref,PidS}} ->
-                NQ = reset(TabID,Q),
-                catch PidS ! {{reset,TabID,Ref},ready},
+            {reset,TID,{Ref,Pid}} ->
+                NQ = reset(TID,Q),
+                catch Pid ! {{reset,TID,Ref},ready},
                 loop([O,NQ]);
-            {reset,TabID} ->
-                NQ = reset(TabID,Q),
+            {reset,TID} ->
+                NQ = reset(TID,Q),
                 loop([O,NQ]);
-            {clean,TabID,{Ref,PidS}} ->
+            {clean,TID,{Ref,Pid}} ->
                 NO = offset(O,Q,null,null,null),
-                collect(NO*10,TabID),
-                catch PidS ! {{clean,TabID,Ref},ready},
-                clean_loop([NO,Q,TabID]);
-            {apply,_TabID} ->
+                collect(NO*10,TID),
+                catch Pid ! {{clean,TID,Ref},ready},
+                clean_loop([NO,Q,TID]);
+            {apply,_TID} ->
                 loop([O,Q]);
-            {apply,_TabID,{_Ref,_PidID}} ->
+            {apply,_TID,{_Ref,_PidID}} ->
                 loop([O,Q])
         end.
 
-    clean_loop([O,Q,TabID]) ->
+    clean_loop([O,Q,TID]) ->
         receive
-            {apply,TabID} ->
-                NQ = reset(TabID,Q),
-                ?SUPPORT andalso cast(?SECONDARY,reset,TabID),
+            {apply,TID} ->
+                NQ = reset(TID,Q),
+                ?SUPPORT andalso cast(?SECONDARY,reset,TID),
                 loop([O,NQ]);
-            {apply,TabID,{Ref,PidS}} ->
-                NQ = reset(TabID,Q),
-                ?SUPPORT andalso call(?SECONDARY,reset,TabID),
-                catch PidS ! {{apply,TabID,Ref},ready},
+            {apply,TID,{Ref,Pid}} ->
+                NQ = reset(TID,Q),
+                ?SUPPORT andalso call(?SECONDARY,reset,TID),
+                catch Pid ! {{apply,TID,Ref},ready},
                 loop([O,NQ])
         after ?TIMEOUT_CLEAN ->
             loop([O,Q])
@@ -393,10 +393,10 @@
             true -> "skip"
         end.
 
-    reset(TabID,Q) ->
-        TL = case ets:info(TabID) of
+    reset(TID,Q) ->
+        TL = case ets:info(TID) of
             undefined -> [];
-            _ -> ets:tab2list(TabID)
+            _ -> ets:tab2list(TID)
         end,
         put(reset,0),
         lists:foreach(
@@ -420,7 +420,7 @@
         Q - erase(reset).
 
 
-    collect(O,TabID) ->
+    collect(O,TID) ->
         Ref = make_ref(),
         if
             (O-1) div ?MAX_LIMIT == 0 ->
@@ -430,7 +430,7 @@
                         case whereis(N) of
                             undefined -> skip;
                             _ ->
-                                lfu_simple_score:fetch(N,Ref,self(),TabID,
+                                lfu_simple_score:fetch(N,Ref,self(),TID,
                                     if
                                         I == 0 ->
                                             ?SCORE_OFFSET+1;
@@ -457,7 +457,7 @@
                         case whereis(N) of
                             undefined -> skip;
                             _ ->
-                                lfu_simple_score:fetch(N,Ref,self(),TabID,
+                                lfu_simple_score:fetch(N,Ref,self(),TID,
                                     if
                                         I == 0 ->
                                             ?SCORE_OFFSET+1;
@@ -484,7 +484,7 @@
                         case whereis(N) of
                             undefined -> skip;
                             _ ->
-                                lfu_quick_score:fetch(N,Ref,self(),TabID)
+                                lfu_quick_score:fetch(N,Ref,self(),TID)
                         end
                     end
                 ),
