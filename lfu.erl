@@ -7,25 +7,7 @@
 ]).
 -author('VSolenkov').
 -describe('Least Frequently Used').
-
--define(MIN_LIMIT,10000000).
--define(MAX_LIMIT,1000000000).
--define(MAX_ORDER,100000000000000).
--define(MIN_ORDER,100).
--define(MIN_OFFSET,10).			%% low limit for step to next rank
--define(MAX_OFFSET,30).			%% up limit for step to prev rank
--define(SCORE_OFFSET,0).		%% must be less than ?MIN_ORDER && for example if it`s necessary begin score from 100 then need setting to 99
--define(TIMEOUT_CLEAN,30000).
--define(TIMEOUT_COUNT,10000).
-
--ifdef(support).
-    -define(SUPPORT,true).
-    -define(SECONDARY,kit).
--else.
-    -define(SUPPORT,false).
-    -define(SECONDARY,any).
--endif.
-
+-include("include/lfu.hrl").
 
 
     event(Event) ->
@@ -94,10 +76,10 @@
                         N = list_to_atom("o0" ++ integer_to_list(0)),
                         case whereis(N) of
                             undefined ->
-                                register(N,spawn(fun() -> s_score_loop([0,0]) end)),
-                                catch N ! {point,K};
+                                lfu_simple_score:start([0,0]),
+                                lfu_simple_score:point(N,K);
                             _ ->
-                                catch N ! {point,K}
+                                lfu_simple_score:point(N,K)
                         end,
                         put(K,1),
                         ?SUPPORT andalso cast(?SECONDARY,point,K),
@@ -112,20 +94,20 @@
                                         N = list_to_atom("o0" ++ integer_to_list(C div ?MIN_LIMIT)),
                                         case whereis(N) of
                                             undefined ->
-                                                register(N,spawn(fun() -> s_score_loop([C div ?MIN_LIMIT,0]) end)),
-                                                catch N ! {point,K};
+                                                lfu_simple_score:start([C div ?MIN_LIMIT,0]),
+                                                lfu_simple_score:point(N,K);
                                             _ ->
-                                                catch N ! {point,K}
+                                                lfu_simple_score:point(N,K)
                                         end,
-                                        catch list_to_atom("o0" ++ integer_to_list(C div ?MIN_LIMIT - 1)) ! {reset,K};
+                                        lfu_simple_score:reset(list_to_atom("o0" ++ integer_to_list(C div ?MIN_LIMIT - 1)),K);
                                     true ->
                                         N = list_to_atom("o0" ++ integer_to_list(C div ?MIN_LIMIT)),
                                         case whereis(N) of
                                             undefined ->
-                                                register(N,spawn(fun() -> s_score_loop([C div ?MIN_LIMIT,0]) end)),
-                                                catch N ! {point,K};
+                                                lfu_simple_score:start([C div ?MIN_LIMIT,0]),
+                                                lfu_simple_score:point(N,K);
                                             _ ->
-                                                catch N ! {point,K}
+                                                lfu_simple_score:point(N,K)
                                         end
                                 end;
                             %% after MAX LIMIT
@@ -134,14 +116,14 @@
                                 N = list_to_atom("o" ++ integer_to_list(C div ?MAX_LIMIT)),
                                 case whereis(N) of
                                     undefined ->
-                                        register(N,spawn(fun() -> q_score_loop([C div ?MAX_LIMIT,0]) end)),
-                                        catch N ! {point,K};
+                                        lfu_quick_score:start([C div ?MAX_LIMIT,0]),
+                                        lfu_quick_score:point(N,K);
                                     _ ->
-                                        catch N ! {point,K}
+                                        lfu_quick_score:point(N,K)
                                 end,
                                 if
-                                    C div ?MAX_LIMIT > 1 -> catch list_to_atom("o" ++ integer_to_list(C div ?MAX_LIMIT - 1)) ! {reset,K};
-                                    true -> catch list_to_atom("o0" ++ integer_to_list(C div ?MIN_LIMIT - 1)) ! {reset,K}
+                                    C div ?MAX_LIMIT > 1 -> lfu_quick_score:reset(list_to_atom("o" ++ integer_to_list(C div ?MAX_LIMIT - 1)),K);
+                                    true -> lfu_simple_score:reset(list_to_atom("o0" ++ integer_to_list(C div ?MIN_LIMIT - 1)),K)
                                 end;
                             true -> skip
                         end,
@@ -160,9 +142,9 @@
                             C ->
                                 if
                                     (C-1) div ?MAX_LIMIT == 0 ->
-                                        catch list_to_atom("o0" ++ integer_to_list((C-1) div ?MIN_LIMIT)) ! {reset,K};
+                                        lfu_simple_score:reset(list_to_atom("o0" ++ integer_to_list((C-1) div ?MIN_LIMIT)),K);
                                     true ->
-                                        catch list_to_atom("o" ++ integer_to_list((C-1) div ?MAX_LIMIT)) ! {reset,K}
+                                        lfu_quick_score:reset(list_to_atom("o" ++ integer_to_list((C-1) div ?MAX_LIMIT)),K)
                                 end
                          end,
                          if
@@ -174,12 +156,12 @@
                                                  N = list_to_atom("o0" ++ integer_to_list(I)),
                                                  case whereis(N) of
                                                      undefined ->
-                                                         register(N,spawn(fun() -> s_score_loop([I,0]) end));
+                                                         lfu_simple_score:start([I,0]);
                                                      _ -> skip
                                                  end,
                                                  if
                                                      I == (V-1) div ?MIN_LIMIT ->
-                                                         catch N ! {cheat,{K,V}};
+                                                         lfu_simple_score:cheat(N,K,V);
                                                      true -> skip
                                                  end
                                              end
@@ -190,7 +172,7 @@
                                                  N = list_to_atom("o0" ++ integer_to_list(I)),
                                                  case whereis(N) of
                                                      undefined ->
-                                                         register(N,spawn(fun() -> s_score_loop([I,0]) end));
+                                                         lfu_simple_score:start([I,0]);
                                                      _ -> skip
                                                  end
                                              end
@@ -200,12 +182,12 @@
 				                 N = list_to_atom("o" ++ integer_to_list(I)),
                                                  case whereis(N) of
                                                      undefined ->
-                                                         register(N,spawn(fun() -> q_score_loop([I,0]) end));
+                                                         lfu_quick_score:start([I,0]);
                                                      _ -> skip
                                                  end,
                                                  if
                                                      I == (V-1) div ?MAX_LIMIT ->
-                                                         catch N ! {point,K};
+                                                         lfu_quick_score:point(N,K);
                                                      true -> skip
                                                  end
                                              end
@@ -320,30 +302,28 @@
                         case whereis(list_to_atom("o0" ++ integer_to_list(I))) of
                             undefined -> "skip";
                             N ->
-                                catch N ! { score,{Ref,self()},
-                                    if
-                                        U >= ?MIN_LIMIT*(I+1) ->
-                                            if
-                                                I == 0 ->
-                                                    {L+1,?MIN_LIMIT*(I+1)};
-                                                true ->
-                                                    {?MIN_LIMIT*I+1,?MIN_LIMIT*(I+1)}
-                                            end;
-                                        true ->
-                                            {L+1,U}
-                                    end
-%                                    if
-%                                        I == 0 ->
-%                                            if
-%                                                U > ?MIN_LIMIT*(I+1) ->
-%                                                    {L+1,?MIN_LIMIT*(I+1)};
-%                                                true ->
-%                                                    {L+1,U}
-%                                            end;
-%                                        true ->
-%                                            {?MIN_LIMIT*I+1,?MIN_LIMIT*(I+1)}
-%                                    end
-                                }
+                                if
+                                    U >= ?MIN_LIMIT*(I+1) ->
+                                        if
+                                            I == 0 ->
+                                                lfu_simple_score:score(N,Ref,self(),L+1,?MIN_LIMIT*(I+1));
+                                            true ->
+                                                lfu_simple_score:score(N,Ref,self(),?MIN_LIMIT*I+1,?MIN_LIMIT*(I+1))
+                                        end;
+                                    true ->
+                                        lfu_simple_score:score(N,Ref,self(),L+1,U)
+                                end
+%                               if
+%                                   I == 0 ->
+%                                       if
+%                                           U > ?MIN_LIMIT*(I+1) ->
+%                                               lfu_simple_score:score(N,Ref,self(),L+1,?MIN_LIMIT*(I+1));
+%                                           true ->
+%                                               lfu_simple_score:score(N,Ref,self(),L+1,U)
+%                                       end;
+%                                   true ->
+%                                       lfu_simple_score:score(N,Ref,self(),?MIN_LIMIT*I+1,?MIN_LIMIT*(I+1))
+%                               end
                         end
                     end
                 ),
@@ -358,25 +338,23 @@
                         case whereis(list_to_atom("o0" ++ integer_to_list(I))) of
                             undefined -> "skip";
                             N ->
-                                catch N ! { score,{Ref,self()},
-                                    if
-                                        U >= ?MIN_LIMIT*(I+1) ->
-                                            if
-                                                I == 0 ->
-                                                    {L+1,?MIN_LIMIT*(I+1)};
-                                                true ->
-                                                    {?MIN_LIMIT*I+1,?MIN_LIMIT*(I+1)}
-                                            end;
-                                        true ->	%% never hit in this branch
-                                            {L+1,U}
-                                    end
-%                                    if
-%                                        I == 0 ->
-%                                            {L+1,?MIN_LIMIT*(I+1)};
-%                                        true ->
-%                                            {?MIN_LIMIT*I+1,?MIN_LIMIT*(I+1)}
-%                                    end
-                                }
+                                if
+                                    U >= ?MIN_LIMIT*(I+1) ->
+                                        if
+                                            I == 0 ->
+                                                lfu_simple_score:score(N,Ref,self(),L+1,?MIN_LIMIT*(I+1));
+                                            true ->
+                                                lfu_simple_score:score(N,Ref,self(),?MIN_LIMIT*I+1,?MIN_LIMIT*(I+1))
+                                        end;
+                                    true ->	%% never hit in this branch
+                                        lfu_simple_score:score(N,Ref,self(),L+1,U)
+                                end
+%                               if
+%                                   I == 0 ->
+%                                       lfu_simple_score:score(N,Ref,self(),L+1,?MIN_LIMIT*(I+1));
+%                                   true ->
+%                                       lfu_simple_score:score(N,Ref,self(),?MIN_LIMIT*I+1,?MIN_LIMIT*(I+1))
+%                               end
                         end
                     end
                 ),
@@ -388,7 +366,7 @@
 
                 for(if L div ?MAX_LIMIT > 0 -> L div ?MAX_LIMIT; true -> 1 end,U div ?MAX_LIMIT - 1,
                     fun(I) ->
-                        case whereis(list_to_atom("o" ++ integer_to_list(I))) of undefined -> "skip"; N -> catch N ! {score,{Ref,self()}} end
+                        case whereis(list_to_atom("o" ++ integer_to_list(I))) of undefined -> "skip"; N -> lfu_quick_score:score(N,Ref,self()) end
                     end
                 ),
                 count_loop([length(grep(foreach(if L div ?MAX_LIMIT > 0 -> L div ?MAX_LIMIT; true -> 1 end,U div ?MAX_LIMIT - 1,fun(I) -> I end),
@@ -409,94 +387,11 @@
                     {{C,R},ready} when C =:= fetch ->
                         if Q > 1 -> count_loop([Q-1,R,C]); true -> "skip" end
                 after ?TIMEOUT_COUNT ->
+                    io:format("!!!TIMEOUT!!!~nQ:~pC:~p~n",[Q,C]),
                     "skip"
                 end;
             true -> "skip"
         end.
-
-
-    q_score_loop([O,Q]) ->
-        receive
-            {point,K} ->
-                case get(K) of
-                    undefined ->
-                        put(K,1),
-                        q_score_loop([O,Q+1]);
-                    C ->
-                        put(K,C+1),
-                        q_score_loop([O,Q])
-                end;
-            {reset,K} ->
-                erase(K),
-                q_score_loop([O,Q-1]);
-            {score,{Ref,PidS}} ->
-                C = Q,
-                catch PidS ! {{score,Ref},C},
-                q_score_loop([O,Q]);
-            {fetch,{Ref,PidS},TabID} ->
-                if Q > 0 -> q_insert(O,TabID); true -> skip end,
-                catch PidS ! {{fetch,Ref},ready},
-                q_score_loop([O,Q])
-        end.
-
-    s_score_loop([O,Q]) ->
-        receive
-            {point,K} ->
-                case get(K) of
-                    undefined ->
-                        put(K,?MIN_LIMIT*O+1),
-                        if
-                            ?SCORE_OFFSET == 0 ->
-                                s_score_loop([O,Q+1]);
-                            true ->
-                                s_score_loop([O,Q])
-                        end;
-                    C ->
-                        put(K,C+1),
-                        if
-                            (C+1) / (?SCORE_OFFSET+1) == 1 ->
-                                s_score_loop([O,Q+1]);
-                            true ->
-                                s_score_loop([O,Q])
-                        end
-                end;
-            {cheat,{K,V}} ->
-                put(K,V),
-                if
-                    V > ?SCORE_OFFSET ->
-                        s_score_loop([O,Q+1]);
-                    true ->
-                        s_score_loop([O,Q])
-                end;
-            {reset,K} ->
-                V = erase(K),
-                if
-                    V > ?SCORE_OFFSET ->
-                        s_score_loop([O,Q-1]);
-                    true ->
-                        s_score_loop([O,Q])
-                end;
-            {score,{Ref,PidS},{L,U}} ->
-                C = if O > 0 orelse (L == ?SCORE_OFFSET+1 andalso U == ?MIN_LIMIT*(O+1)) -> Q; true -> s_scoring(L,U) end,
-                catch PidS ! {{score,Ref},C},
-                s_score_loop([O,Q]);
-            {fetch,{Ref,PidS},{TabID,L,U}} ->
-                if Q > 0 -> s_insert(L,U,TabID); true -> skip end,
-                catch PidS ! {{fetch,Ref},ready},
-                s_score_loop([O,Q])
-        end.
-
-
-    s_scoring(L,U) ->
-        put(counter,0.0),
-        for(L,U,fun(I) -> put(counter,get(counter) + length(get_keys(I))) end),
-        get(counter).
-
-    q_insert(I,TabID) ->
-        case get_keys(1) of [] -> 1; KL -> ets:insert(TabID,{I*?MAX_LIMIT,KL}) end.
-
-    s_insert(L,U,TabID) ->
-        for(L,U,fun(I) -> case get_keys(I) of [] -> 1; KL -> ets:insert(TabID,{I,KL}) end end).
 
     reset(TabID,Q) ->
         TL = case ets:info(TabID) of
@@ -510,12 +405,12 @@
                     fun(K) ->
                         C = erase(K),
                         if
-                            (C - 1) div ?MAX_LIMIT == 0 ->
+                            (C-1) div ?MAX_LIMIT == 0 ->
                                 N  = list_to_atom("o0" ++ integer_to_list((C-1) div ?MIN_LIMIT)),
-                                catch N ! {reset,K};
+                                lfu_simple_score:reset(N,K);
                             true ->
                                 N = list_to_atom("o" ++ integer_to_list((C-1) div ?MAX_LIMIT)),
-                                catch N ! {reset,K}
+                                lfu_quick_score:reset(N,K)
                         end,
                         put(reset,get(reset)+1)
                     end,
@@ -535,7 +430,7 @@
                         case whereis(N) of
                             undefined -> skip;
                             _ ->
-                                catch N ! {fetch,{Ref,self()},{TabID,
+                                lfu_simple_score:fetch(N,Ref,self(),TabID,
                                     if
                                         I == 0 ->
                                             ?SCORE_OFFSET+1;
@@ -546,7 +441,7 @@
                                             ?MIN_LIMIT*(I+1);
                                         true -> O
                                     end
-                                }}
+                                )
                         end
                     end
                 ),
@@ -562,7 +457,7 @@
                         case whereis(N) of
                             undefined -> skip;
                             _ ->
-                                catch N ! {fetch,{Ref,self()},{TabID,
+                                lfu_simple_score:fetch(N,Ref,self(),TabID,
                                     if
                                         I == 0 ->
                                             ?SCORE_OFFSET+1;
@@ -573,7 +468,7 @@
                                             ?MIN_LIMIT*(I+1);
                                         true ->	O %% never hit in this branch
                                     end
-                                }}
+                                )
                         end
                     end
                 ),
@@ -589,7 +484,7 @@
                         case whereis(N) of
                             undefined -> skip;
                             _ ->
-                                catch N ! {fetch,{Ref,self()},TabID}
+                                lfu_quick_score:fetch(N,Ref,self(),TabID)
                         end
                     end
                 ),
