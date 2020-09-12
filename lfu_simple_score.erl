@@ -35,9 +35,14 @@ cast(Pid,Event,Data1,Data2) ->
 
 
 start([O,Q]) ->
-    register(list_to_atom("o0" ++ integer_to_list(O)),spawn(?MODULE,init,[[O,Q]]));
+    P = spawn(?MODULE,init,[[O,Q]]),
+    register(list_to_atom("o0" ++ integer_to_list(O)),P),P;
 start([O,Q,S]) ->
-    register(list_to_atom("o0" ++ integer_to_list(O)),spawn(?MODULE,init,[[O,Q,S]])).
+    P = spawn(?MODULE,init,[[O,Q,S]]),
+    register(list_to_atom("o0" ++ integer_to_list(O)),P),P;
+start([O,Q,S,E]) ->
+    P = spawn(?MODULE,init,[[O,Q,S,E]]),
+    register(list_to_atom("o0" ++ integer_to_list(O)),P),P.
 
 
 init([O,Q]) ->
@@ -45,8 +50,12 @@ init([O,Q]) ->
 init([O,Q,S]) when S =:= ready ->
     loop([O,Q]);
 init([O,_,S]) when S =:= reboot ->
-    NQ = 0, %% recovery function
-    loop([O,NQ]).
+    Q = restorage(?ETS_TABLE_NAME,if O == 0 -> ?SCORE_OFFSET+1; true -> ?MIN_LIMIT*O+1 end,?MIN_LIMIT*(O+1)),
+    loop([O,Q]);
+init([O,_,S,E]) when S =:= reboot ->
+    Q = restorage(?ETS_TABLE_NAME,if O == 0 -> ?SCORE_OFFSET+1; true -> ?MIN_LIMIT*O+1 end,?MIN_LIMIT*(O+1),E),
+    loop([O,Q]).
+
 
 loop([O,Q]) ->
     receive
@@ -102,6 +111,47 @@ scoring(L,U) ->
 
 insert(L,U,TID) ->
     for(L,U,fun(I) -> case get_keys(I) of [] -> 1; KL -> ets:insert(TID,{I,KL}) end end).
+
+restorage(T,L,U) ->
+    TL = case ets:info(T) of
+        undefined -> [];
+        _ -> ets:tab2list(T)
+    end,
+    io:format("+!!!!!TL:~p!!!!!+~n",[TL]),
+
+    put(quantity,0),
+    lists:foreach(
+        fun({K,V}) ->
+            put(K,V),
+            put(quantity,get(quantity)+1)
+        end,
+        lists:filter(
+            fun({_,V}) ->
+                V >= L andalso V =< U
+            end,
+        TL)
+    ),
+    erase(quantity).
+restorage(T,L,U,E) ->
+    TL = case ets:info(T) of
+        undefined -> [];
+        _ -> ets:tab2list(T)
+    end,
+    io:format("+!!!!!TL:~p!!!!!+~n",[TL]),
+
+    put(quantity,0),
+    lists:foreach(
+        fun({K,V}) ->
+            put(K,V),
+            put(quantity,get(quantity)+1)
+        end,
+        lists:filter(
+            fun({K,V}) ->
+                V >= L andalso V =< U andalso K =/= E
+            end,
+        TL)
+    ),
+    erase(quantity).
 
 for(N,N,F) -> F(N);
 for(I,N,_) when I > N -> null;
