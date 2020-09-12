@@ -5,6 +5,7 @@
     start/1,
     point/2,
     reset/2,
+    cheat/3,
     score/3,
     fetch/4
 ]).
@@ -19,6 +20,8 @@ point(N,K) ->
     cast(N,point,K).
 reset(N,K) ->
     cast(N,reset,K).
+cheat(N,K,V) ->
+    cast(N,cheat,{K,V}).
 score(N,R,P) ->
     cast(N,score,{R,P}).
 fetch(N,R,P,T) ->
@@ -32,9 +35,14 @@ cast(Pid,Event,Data1,Data2) ->
 
 
 start([O,Q]) ->
-    register(list_to_atom("o" ++ integer_to_list(O)),spawn(?MODULE,init,[[O,Q]]));
+    P = spawn(?MODULE,init,[[O,Q]]),
+    register(list_to_atom("o" ++ integer_to_list(O)),P),P;
 start([O,Q,S]) ->
-    register(list_to_atom("o" ++ integer_to_list(O)),spawn(?MODULE,init,[[O,Q,S]])).
+    P = spawn(?MODULE,init,[[O,Q,S]]),
+    register(list_to_atom("o" ++ integer_to_list(O)),P),P;
+start([O,Q,S,E]) ->
+    P = spawn(?MODULE,init,[[O,Q,S,E]]),
+    register(list_to_atom("o" ++ integer_to_list(O)),P),P.
 
 
 init([O,Q]) ->
@@ -42,8 +50,12 @@ init([O,Q]) ->
 init([O,Q,S]) when S =:= ready ->
     loop([O,Q]);
 init([O,_,S]) when S =:= reboot ->
-    NQ = 0, %% recovery function
-    loop([O,NQ]).
+    Q = restorage(?ETS_TABLE_NAME,?MAX_LIMIT*O+1,?MAX_LIMIT*(O+1)),
+    loop([O,Q]);
+init([O,_,S,E]) when S =:= reboot ->
+    Q = restorage(?ETS_TABLE_NAME,?MAX_LIMIT*O+1,?MAX_LIMIT*(O+1),E),
+    loop([O,Q]).
+
 
 loop([O,Q]) ->
     receive
@@ -56,6 +68,9 @@ loop([O,Q]) ->
                      put(K,C+1),
                      loop([O,Q])
             end;
+        {cheat,{K,V}} ->
+            put(K,V),
+            loop([O,Q+1]);
         {reset,K} ->
             erase(K),
             loop([O,Q-1]);
@@ -70,3 +85,44 @@ loop([O,Q]) ->
 
 insert(I,TID) ->
     case get_keys(1) of [] -> 1; KL -> ets:insert(TID,{I*?MAX_LIMIT,KL}) end.
+
+restorage(T,L,U) ->
+    TL = case ets:info(T) of
+        undefined -> [];
+        _ -> ets:tab2list(T)
+    end,
+    io:format("+!!!!!TL:~p!!!!!+~n",[TL]),
+
+    put(quantity,0),
+    lists:foreach(
+        fun({K,_}) ->
+            put(K,1),
+            put(quantity,get(quantity)+1)
+        end,
+        lists:filter(
+            fun({_,V}) ->
+                V >= L andalso V =< U
+            end,
+        TL)
+    ),
+    erase(quantity).
+restorage(T,L,U,E) ->
+    TL = case ets:info(T) of
+        undefined -> [];
+        _ -> ets:tab2list(T)
+    end,
+    io:format("+!!!!!TL:~p!!!!!+~n",[TL]),
+
+    put(quantity,0),
+    lists:foreach(
+        fun({K,_}) ->
+            put(K,1),
+            put(quantity,get(quantity)+1)
+        end,
+        lists:filter(
+            fun({K,V}) ->
+                V >= L andalso V =< U andalso K =/= E
+            end,
+        TL)
+    ),
+    erase(quantity).

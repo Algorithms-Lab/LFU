@@ -5,9 +5,11 @@
 -define(MIN_OFFSET,10).			%% low limit for step to next rank
 -define(MAX_OFFSET,30).			%% up limit for step to prev rank
 -define(SCORE_OFFSET,0).		%% must be less than ?MIN_ORDER && for example if it`s necessary begin score from 100 then need setting to 99
--define(TABLE_NAME,lfu).
 -define(TIMEOUT_CLEAN,30000).
 -define(TIMEOUT_COUNT,10000).
+-define(PREFIX_KEY,"lfu___").
+-define(POSTFIX_KEY,"__lfu").
+-define(ETS_TABLE_NAME,lfu_).
 
 -ifdef(support).
     -define(SUPPORT,true).
