@@ -297,9 +297,9 @@ loop([O,Q]) ->
                                  true ->
                                      if
                                          OV > ?SCORE_OFFSET ->
-                                             erase(K),ets:delete(K,?ETS_TABLE_NAME),put(clean,get(clean)+1),false;
+                                             erase(K),ets:delete(?ETS_TABLE_NAME,K),put(clean,get(clean)+1),false;
                                          true ->
-                                             erase(K),ets:delete(K,?ETS_TABLE_NAME),false
+                                             erase(K),ets:delete(?ETS_TABLE_NAME,K),false
                                      end
                              end
                      end;
@@ -463,6 +463,7 @@ count_loop([Q,R,C]) ->
                 {{C,R},ready} when C =:= fetch ->
                     if Q > 1 -> count_loop([Q-1,R,C]); true -> "skip" end
             after ?TIMEOUT_COUNT ->
+                io:format("+!!!!!TIMEOUT!!!!!+:~p~n",[Q]),
                 "skip"
             end;
         true -> "skip"

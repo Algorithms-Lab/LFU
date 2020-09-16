@@ -3,6 +3,7 @@
 
 -export([
     start/1,
+    state/1,
     point/2,
     reset/2,
     cheat/3,
@@ -26,7 +27,17 @@ score(N,R,P) ->
     cast(N,score,{R,P}).
 fetch(N,R,P,T) ->
     cast(N,fetch,{R,P},T).
+state(N) ->
+    call(N,state,[]).
 
+call(Name,Event,Data) ->
+    Ref = erlang:monitor(process,Name),
+    catch whereis(Name) ! {Event,Data,{Ref,self()}},
+    receive
+        {{Event,Data,Ref},Reply} -> erlang:demonitor(Ref,[flush]),Reply;
+        {'DOWN',Ref,proceess,_Name,_Reason} -> {error,no_proc};
+        Other -> io:format("Other:~p~n",[Other])
+    end.
 
 cast(Pid,Event,Data) ->
     catch Pid ! {Event,Data}.
@@ -76,6 +87,9 @@ loop([O,Q]) ->
             loop([O,Q-1]);
         {score,{R,P}} ->
             catch P ! {{score,R},Q},
+            loop([O,Q]);
+        {state,S,{R,P}} ->
+            catch P ! {{state,S,R},[O,Q]},
             loop([O,Q]);
         {fetch,{R,P},TID} ->
             if Q > 0 -> insert(O,TID); true -> skip end,
