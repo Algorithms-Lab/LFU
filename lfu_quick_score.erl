@@ -46,13 +46,13 @@ cast(Pid,Event,Data1,Data2) ->
 
 
 start([O,Q]) ->
-    P = spawn(?MODULE,init,[[O,Q]]),
+    P = spawn_opt(?MODULE,init,[[O,Q]],?SPAWN_OPT_QUICK_SCORE),
     register(list_to_atom("o" ++ integer_to_list(O)),P),P;
 start([O,Q,S]) ->
-    P = spawn(?MODULE,init,[[O,Q,S]]),
+    P = spawn_opt(?MODULE,init,[[O,Q,S]],?SPAWN_OPT_QUICK_SCORE),
     register(list_to_atom("o" ++ integer_to_list(O)),P),P;
 start([O,Q,S,E]) ->
-    P = spawn(?MODULE,init,[[O,Q,S,E]]),
+    P = spawn_opt(?MODULE,init,[[O,Q,S,E]],?SPAWN_OPT_QUICK_SCORE),
     register(list_to_atom("o" ++ integer_to_list(O)),P),P.
 
 

@@ -479,6 +479,7 @@ reset(TID,Q) ->
         fun({_,KL}) ->
             lists:foreach(
                 fun(K) ->
+                    ets:delete(?ETS_TABLE_NAME,K),
                     C = erase(K),
                     if
                         (C-1) div ?MAX_LIMIT == 0 ->
