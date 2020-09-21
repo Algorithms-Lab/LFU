@@ -76,10 +76,15 @@ loop([O,Q]) ->
                 undefined ->
                     put(K,?MIN_LIMIT*O+1),
                     if
-                        ?SCORE_OFFSET == 0 ->
-                            loop([O,Q+1]);
+                        O == 0 ->
+                            if
+                                ?SCORE_OFFSET == 0 ->
+                                    loop([O,Q+1]);
+                                true ->
+                                    loop([O,Q])
+                            end;
                         true ->
-                            loop([O,Q])
+                            loop([O,Q+1])
                     end;
                 C ->
                     put(K,C+1),
