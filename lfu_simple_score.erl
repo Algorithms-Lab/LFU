@@ -62,10 +62,10 @@ init([O,Q]) ->
 init([O,Q,S]) when S =:= ready ->
     loop([O,Q]);
 init([O,_,S]) when S =:= reboot ->
-    Q = restorage(?ETS_TABLE_NAME,if O == 0 -> ?SCORE_OFFSET+1; true -> ?MIN_LIMIT*O+1 end,?MIN_LIMIT*(O+1)),
+    Q = restorage(?ETS_TABLE_NAME,?MIN_LIMIT*O+1,?MIN_LIMIT*(O+1),O),
     loop([O,Q]);
 init([O,_,S,E]) when S =:= reboot ->
-    Q = restorage(?ETS_TABLE_NAME,if O == 0 -> ?SCORE_OFFSET+1; true -> ?MIN_LIMIT*O+1 end,?MIN_LIMIT*(O+1),E),
+    Q = restorage(?ETS_TABLE_NAME,?MIN_LIMIT*O+1,?MIN_LIMIT*(O+1),O,E),
     loop([O,Q]).
 
 
@@ -127,7 +127,7 @@ scoring(L,U) ->
 insert(L,U,TID) ->
     for(L,U,fun(I) -> case get_keys(I) of [] -> 1; KL -> ets:insert(TID,{I,KL}) end end).
 
-restorage(T,L,U) ->
+restorage(T,L,U,O) ->
     TL = case ets:info(T) of
         undefined -> [];
         _ -> ets:tab2list(T)
@@ -135,19 +135,34 @@ restorage(T,L,U) ->
     io:format("+!!!!!TL:~p!!!!!+~n",[TL]),
 
     put(quantity,0),
-    lists:foreach(
-        fun({K,V}) ->
-            put(K,V),
-            put(quantity,get(quantity)+1)
-        end,
-        lists:filter(
-            fun({_,V}) ->
-                V >= L andalso V =< U
-            end,
-        TL)
-    ),
+    if
+        O == 0 ->
+            lists:foreach(
+                fun({K,V}) ->
+                    put(K,V),
+                    V > ?SCORE_OFFSET andalso put(quantity,get(quantity)+1)
+                end,
+                lists:filter(
+                    fun({_,V}) ->
+                        V >= L andalso V =< U
+                    end,
+                TL)
+            );
+        true ->
+            lists:foreach(
+                fun({K,V}) ->
+                    put(K,V),
+                    put(quantity,get(quantity)+1)
+                end,
+                lists:filter(
+                    fun({_,V}) ->
+                        V >= L andalso V =< U
+                    end,
+                TL)
+            )
+    end,
     erase(quantity).
-restorage(T,L,U,E) ->
+restorage(T,L,U,O,E) ->
     TL = case ets:info(T) of
         undefined -> [];
         _ -> ets:tab2list(T)
@@ -155,17 +170,32 @@ restorage(T,L,U,E) ->
     io:format("+!!!!!TL:~p!!!!!+~n",[TL]),
 
     put(quantity,0),
-    lists:foreach(
-        fun({K,V}) ->
-            put(K,V),
-            put(quantity,get(quantity)+1)
-        end,
-        lists:filter(
-            fun({K,V}) ->
-                V >= L andalso V =< U andalso K =/= E
-            end,
-        TL)
-    ),
+    if
+        O == 0 ->
+            lists:foreach(
+                fun({K,V}) ->
+                    put(K,V),
+                    V > ?SCORE_OFFSET andalso put(quantity,get(quantity)+1)
+                end,
+                lists:filter(
+                    fun({K,V}) ->
+                        V >= L andalso V =< U andalso K =/= E
+                    end,
+                TL)
+            );
+        true ->
+            lists:foreach(
+                fun({K,V}) ->
+                    put(K,V),
+                    put(quantity,get(quantity)+1)
+                end,
+                lists:filter(
+                    fun({K,V}) ->
+                        V >= L andalso V =< U andalso K =/= E
+                    end,
+                TL)
+            )
+    end,
     erase(quantity).
 
 for(N,N,F) -> F(N);
