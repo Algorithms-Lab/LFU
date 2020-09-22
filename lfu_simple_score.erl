@@ -123,7 +123,7 @@ loop([O,Q]) ->
             catch P ! {{fetch,R},ready},
             loop([O,Q])
     end.
-    
+
 scoring(L,U) ->
     put(counter,0.0),
     for(L,U,fun(I) -> put(counter,get(counter) + length(get_keys(I))) end),
@@ -137,7 +137,7 @@ restorage(T,L,U,O) ->
         undefined -> [];
         _ -> ets:tab2list(T)
     end,
-    io:format("+!!!!!TL:~p!!!!!+~n",[TL]),
+    %io:format("+!!!!!TL:~p!!!!!+~n",[TL]),
 
     put(quantity,0),
     if
@@ -172,7 +172,7 @@ restorage(T,L,U,O,E) ->
         undefined -> [];
         _ -> ets:tab2list(T)
     end,
-    io:format("+!!!!!TL:~p!!!!!+~n",[TL]),
+    %io:format("+!!!!!TL:~p!!!!!+~n",[TL]),
 
     put(quantity,0),
     if
