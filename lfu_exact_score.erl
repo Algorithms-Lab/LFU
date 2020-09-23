@@ -69,20 +69,20 @@ state(N) ->
 
 
 handle_cast({point,K},[O,Q]) ->
-    [NO,NQ] = point(K,O,Q),
+    [NO,NQ] = point_handler(K,O,Q),
     {noreply,[NO,NQ]};
 handle_cast({cheat,{K,V}},[O,Q]) ->
-    [NO,NQ] = cheat(K,V,O,Q),
+    [NO,NQ] = cheat_handler(K,V,O,Q),
     {noreply,[NO,NQ]};
 handle_cast({reset,K},[O,Q]) ->
-    [NO,NQ] = reset(K,O,Q),
+    [NO,NQ] = reset_handler(K,O,Q),
     {noreply,[NO,NQ]};
 handle_cast({score,{L,U,P,R}},[O,Q]) ->
-    [NO,NQ] = score(L,U,P,R,O,Q),
-    [noreply,[NO,NQ]];
+    [NO,NQ] = score_handler(L,U,P,R,O,Q),
+    {noreply,[NO,NQ]};
 handle_cast({fetch,{L,U,T,P,R}},[O,Q]) ->
-    [NO,NQ] = fetch(L,U,T,P,R,O,Q),
-    [noreply,[NO,NQ]].
+    [NO,NQ] = fetch_handler(L,U,T,P,R,O,Q),
+    {noreply,[NO,NQ]}.
 
 handle_call(state,_From,[O,Q]) ->
     {reply,[O,Q],[O,Q]}.
@@ -96,7 +96,7 @@ handle_info(_,[O,Q]) ->
     {noreply,[O,Q]}.
 
 
-point(K,O,Q) ->
+point_handler(K,O,Q) ->
     case get(K) of
         undefined ->
             put(K,?MIN_LIMIT*O+1),
@@ -120,7 +120,7 @@ point(K,O,Q) ->
                     [O,Q]
             end
     end.
-cheat(K,V,O,Q) ->
+cheat_handler(K,V,O,Q) ->
     put(K,V),
     if
         V > ?SCORE_OFFSET ->
@@ -128,7 +128,7 @@ cheat(K,V,O,Q) ->
         true ->
             [O,Q]
     end.
-reset(K,O,Q) ->
+reset_handler(K,O,Q) ->
     V = erase(K),
     if
         V > ?SCORE_OFFSET ->
@@ -136,11 +136,11 @@ reset(K,O,Q) ->
         true ->
             [O,Q]
     end.
-score(L,U,P,R,O,Q) ->
+score_handler(L,U,P,R,O,Q) ->
     C = if O > 0 orelse (L == ?SCORE_OFFSET+1 andalso U == ?MIN_LIMIT*(O+1)) -> Q; true -> scoring(L,U) end,
     catch P ! {{score,R},C},	%% necessary using client interface function of lfu module for cast message
     [O,Q].
-fetch(L,U,T,P,R,O,Q) ->
+fetch_handler(L,U,T,P,R,O,Q) ->
     if
         Q > 0 ->
             insert(L,U,T);
@@ -152,11 +152,22 @@ fetch(L,U,T,P,R,O,Q) ->
 
 scoring(L,U) ->
     put(counter,0.0),
-    for(L,U,fun(I) -> put(counter,get(counter) + length(get_keys(I))) end),
+    for(L,U,
+        fun(I) ->
+            put(counter,get(counter) + length(get_keys(I)))
+        end
+    ),
     get(counter).
 
 insert(L,U,T) ->
-    for(L,U,fun(I) -> case get_keys(I) of [] -> 1; KL -> ets:insert(T,{I,KL}) end end).
+    for(L,U,
+        fun(I) ->
+            case get_keys(I) of
+                [] -> 1;
+                KL -> ets:insert(T,{I,KL})
+            end
+        end
+    ).
 
 restorage(T,L,U,O) ->
     TL = case ets:info(T) of
