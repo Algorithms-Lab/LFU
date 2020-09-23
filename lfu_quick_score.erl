@@ -1,6 +1,8 @@
 -module(lfu_quick_score).
 -author('VSolenkov').
 
+-behavior('gen_server').
+
 -export([
     start/1,
     state/1,
@@ -14,98 +16,125 @@
 -export([
     init/1
 ]).
+-export([
+    handle_cast/2,
+    handle_call/3,
+    handle_info/2
+]).
 -include("include/lfu.hrl").
 
 
-point(N,K) ->
-    cast(N,point,K).
-reset(N,K) ->
-    cast(N,reset,K).
-cheat(N,K,V) ->
-    cast(N,cheat,{K,V}).
-score(N,R,P) ->
-    cast(N,score,{R,P}).
-fetch(N,R,P,T) ->
-    cast(N,fetch,{R,P},T).
-state(N) ->
-    call(N,state,[]).
-
-call(Name,Event,Data) ->
-    Ref = erlang:monitor(process,Name),
-    catch whereis(Name) ! {Event,Data,{Ref,self()}},
-    receive
-        {{Event,Data,Ref},Reply} -> erlang:demonitor(Ref,[flush]),Reply;
-        {'DOWN',Ref,proceess,_Name,_Reason} -> {error,no_proc};
-        Other -> io:format("Other:~p~n",[Other])
-    end.
-
-cast(Pid,Event,Data) ->
-    catch Pid ! {Event,Data}.
-cast(Pid,Event,Data1,Data2) ->
-    catch Pid ! {Event,Data1,Data2}.
-
-
 start([O,Q]) ->
-    P = spawn_opt(?MODULE,init,[[O,Q]],?SPAWN_OPT_QUICK_SCORE),
-    register(list_to_atom("o" ++ integer_to_list(O)),P),P;
+    gen_server:start_link(
+        {local,list_to_atom("o" ++ integer_to_list(O))},
+        ?MODULE,[O,Q],
+    [{spawn_opt,?SPAWN_OPT_SIMPLE_SCORE}]);
 start([O,Q,S]) ->
-    P = spawn_opt(?MODULE,init,[[O,Q,S]],?SPAWN_OPT_QUICK_SCORE),
-    register(list_to_atom("o" ++ integer_to_list(O)),P),P;
+    gen_server:start_link(
+        {local,list_to_atom("o" ++ integer_to_list(O))},
+        ?MODULE,[O,Q,S],
+    [{spawn_opt,?SPAWN_OPT_SIMPLE_SCORE}]);
 start([O,Q,S,E]) ->
-    P = spawn_opt(?MODULE,init,[[O,Q,S,E]],?SPAWN_OPT_QUICK_SCORE),
-    register(list_to_atom("o" ++ integer_to_list(O)),P),P.
+    gen_server:start_link(
+        {local,list_to_atom("o" ++ integer_to_list(O))},
+        ?MODULE,[O,Q,S,E],
+    [{spawn_opt,?SPAWN_OPT_SIMPLE_SCORE}]).
 
 
 init([O,Q]) ->
-    loop([O,Q]);
+    {ok,[O,Q]};
 init([O,Q,S]) when S =:= ready ->
-    loop([O,Q]);
+    {ok,[O,Q]};
 init([O,_,S]) when S =:= reboot ->
     Q = restorage(?ETS_TABLE_NAME,?MAX_LIMIT*O+1,?MAX_LIMIT*(O+1)),
-    loop([O,Q]);
+    {ok,[O,Q]};
 init([O,_,S,E]) when S =:= reboot ->
     Q = restorage(?ETS_TABLE_NAME,?MAX_LIMIT*O+1,?MAX_LIMIT*(O+1),E),
-    loop([O,Q]).
+    {ok,[O,Q]}.
 
 
-loop([O,Q]) ->
-    receive
-        {point,K} ->
-            case get(K) of
-                undefined ->
-                    put(K,1),
-                    loop([O,Q+1]);
-                 C ->
-                     put(K,C+1),
-                     loop([O,Q])
-            end;
-        {cheat,{K,V}} ->
-            put(K,V),
-            loop([O,Q+1]);
-        {reset,K} ->
-            erase(K),
-            loop([O,Q-1]);
-        {score,{R,P}} ->
-            catch P ! {{score,R},Q},
-            loop([O,Q]);
-        {state,S,{R,P}} ->
-            catch P ! {{state,S,R},[O,Q]},
-            loop([O,Q]);
-        {fetch,{R,P},TID} ->
-            if Q > 0 -> insert(O,TID); true -> skip end,
-            catch P ! {{fetch,R},ready},
-            loop([O,Q])
+point(N,K) ->
+    gen_server:cast(N,{point,K}).
+reset(N,K) ->
+    gen_server:cast(N,{reset,K}).
+cheat(N,K,V) ->
+    gen_server:cast(N,{cheat,{K,V}}).
+score(N,P,R) ->
+    gen_server:cast(N,{score,{P,R}}).
+fetch(N,P,R,T) ->
+    gen_server:cast(N,{fetch,{T,P,R}}).
+state(N) ->
+    gen_server:call(N,state,?TIMEOUT_CALL).
+
+
+
+handle_cast({point,K},[O,Q]) ->
+    NQ = point_handler(K,Q),
+    {noreply,[O,NQ]};
+handle_cast({cheat,{K,V}},[O,Q]) ->
+    NQ = cheat_handler(K,V,Q),
+    {noreply,[O,NQ]};
+handle_cast({reset,K},[O,Q]) ->
+    NQ = reset_handler(K,Q),
+    {noreply,[O,NQ]};
+handle_cast({score,{P,R}},[O,Q]) ->
+    score_handler(P,R,Q),
+    {noreply,[O,Q]};
+handle_cast({fetch,{T,P,R}},[O,Q]) ->
+    fetch_handler(T,P,R,O,Q),
+    {noreply,[O,Q]}.
+
+handle_call(state,_From,[O,Q]) ->
+    {reply,[O,Q],[O,Q]}.
+
+handle_info({'EXIT',_P,normal},[O,Q]) ->
+    {noreply,[O,Q]};
+handle_info({'EXIT',P,R},[O,Q]) ->
+    io:format("Process: ~p over by reason: ~p~n",[P,R]),
+    {noreply,[O,Q]};
+handle_info(_,[O,Q]) ->
+    {noreply,[O,Q]}.
+
+
+point_handler(K,Q) ->
+    case get(K) of
+        undefined ->
+            put(K,1),
+            Q+1;
+        C ->
+            put(K,C+1),
+            Q
+    end.
+cheat_handler(K,V,Q) ->
+    put(K,V),
+    Q+1.
+reset_handler(K,Q) ->
+    erase(K),
+    Q-1.
+score_handler(P,R,Q) ->
+    catch P ! {{score,R},Q}.  %% necessary using client interface function of lfu module for cast message
+fetch_handler(T,P,R,O,Q) ->
+    if
+        Q > 0 ->
+            insert(O,T),
+            catch P ! {{fetch,R},ready};  %% necessary using client interface function of lfu module for cast message
+        true ->
+            catch P ! {{fetch,R},ready}   %% necessary using client interface function of lfu module for cast message
     end.
 
-insert(I,TID) ->
-    case get_keys(1) of [] -> 1; KL -> ets:insert(TID,{I*?MAX_LIMIT,KL}) end.
+
+insert(I,T) ->
+    case get_keys(1) of
+        [] -> 1;
+        KL -> ets:insert(T,{I*?MAX_LIMIT,KL})
+    end.
 
 restorage(T,L,U) ->
     TL = case ets:info(T) of
         undefined -> [];
         _ -> ets:tab2list(T)
     end,
-    io:format("+!!!!!TL:~p!!!!!+~n",[TL]),
+    %io:format("+!!!!!TL:~p!!!!!+~n",[TL]),
 
     put(quantity,0),
     lists:foreach(
@@ -125,7 +154,7 @@ restorage(T,L,U,E) ->
         undefined -> [];
         _ -> ets:tab2list(T)
     end,
-    io:format("+!!!!!TL:~p!!!!!+~n",[TL]),
+    %io:format("+!!!!!TL:~p!!!!!+~n",[TL]),
 
     put(quantity,0),
     lists:foreach(
