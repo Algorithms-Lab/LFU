@@ -11,6 +11,7 @@
 
 -define(TIMEOUT_CLEAN,90000).
 -define(TIMEOUT_COUNT,90000).
+-define(TIMEOUT_CALL,100000).
 
 -define(PREFIX_KEY,"lfu___").
 -define(POSTFIX_KEY,"__lfu").
