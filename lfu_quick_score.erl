@@ -33,11 +33,6 @@ start([O,Q,S]) ->
     gen_server:start_link(
         {local,list_to_atom("o" ++ integer_to_list(O))},
         ?MODULE,[O,Q,S],
-    [{spawn_opt,?SPAWN_OPT_SIMPLE_SCORE}]);
-start([O,Q,S,E]) ->
-    gen_server:start_link(
-        {local,list_to_atom("o" ++ integer_to_list(O))},
-        ?MODULE,[O,Q,S,E],
     [{spawn_opt,?SPAWN_OPT_SIMPLE_SCORE}]).
 
 
@@ -47,9 +42,6 @@ init([O,Q,S]) when S =:= ready ->
     {ok,[O,Q]};
 init([O,_,S]) when S =:= reboot ->
     Q = restorage(?ETS_TABLE_NAME,?MAX_LIMIT*O+1,?MAX_LIMIT*(O+1)),
-    {ok,[O,Q]};
-init([O,_,S,E]) when S =:= reboot ->
-    Q = restorage(?ETS_TABLE_NAME,?MAX_LIMIT*O+1,?MAX_LIMIT*(O+1),E),
     {ok,[O,Q]}.
 
 
@@ -145,26 +137,6 @@ restorage(T,L,U) ->
         lists:filter(
             fun({_,V}) ->
                 V >= L andalso V =< U
-            end,
-        TL)
-    ),
-    erase(quantity).
-restorage(T,L,U,E) ->
-    TL = case ets:info(T) of
-        undefined -> [];
-        _ -> ets:tab2list(T)
-    end,
-    %io:format("+!!!!!TL:~p!!!!!+~n",[TL]),
-
-    put(quantity,0),
-    lists:foreach(
-        fun({K,_}) ->
-            put(K,1),
-            put(quantity,get(quantity)+1)
-        end,
-        lists:filter(
-            fun({K,V}) ->
-                V >= L andalso V =< U andalso K =/= E
             end,
         TL)
     ),
