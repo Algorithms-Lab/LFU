@@ -13,12 +13,15 @@
 -export([
     init/1
 ]).
+-include("include/lfu.hrl").
 
 
 start_link() ->
     supervisor:start_link({local,?MODULE},?MODULE,[]).
 
 init(_) ->
+   ets:new(?ETS_KEYS_TABLE_NAME,[named_table,set,public]),
+   ets:new(?ETS_PIDS_TABLE_NAME,[named_table,bag,public]),
    {ok,{
        {one_for_one,1,300},[
            {

@@ -15,7 +15,9 @@
 
 -define(PREFIX_KEY,"lfu___").
 -define(POSTFIX_KEY,"__lfu").
--define(ETS_TABLE_NAME,lfu_).
+
+-define(ETS_PIDS_TABLE_NAME,lfu_pid).
+-define(ETS_KEYS_TABLE_NAME,lfu_key).
 
 -define(SPAWN_OPT_SIMPLE_SCORE,[
 %   {max_heap_size,0},			%% Erlang/OTP > 18

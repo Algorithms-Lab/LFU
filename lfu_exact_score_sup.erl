@@ -28,14 +28,7 @@ init(_) ->
    }}.
 
 start([O,Q]) ->
-    case get(O) of
-        undefined ->
-            put(O,1),
-            supervisor:start_child(?MODULE,[[O,Q]]);
-        C ->
-            put(O,C+1),
-            supervisor:start_child(?MODULE,[[O,Q,reboot]])
-    end.
+    supervisor:start_child(?MODULE,[[O,Q]]).
 
 stop() ->
     exit(whereis(?MODULE),shutdown).

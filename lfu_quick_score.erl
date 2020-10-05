@@ -28,22 +28,23 @@ start([O,Q]) ->
     gen_server:start_link(
         {local,list_to_atom("o" ++ integer_to_list(O))},
         ?MODULE,[O,Q],
-    [{spawn_opt,?SPAWN_OPT_SIMPLE_SCORE}]);
-start([O,Q,S]) ->
-    gen_server:start_link(
-        {local,list_to_atom("o" ++ integer_to_list(O))},
-        ?MODULE,[O,Q,S],
     [{spawn_opt,?SPAWN_OPT_SIMPLE_SCORE}]).
 
 
 init([O,Q]) ->
-    {ok,[O,Q]};
-init([O,Q,S]) when S =:= ready ->
-    {ok,[O,Q]};
-init([O,_,S]) when S =:= reboot ->
-    Q = restorage(?ETS_TABLE_NAME,?MAX_LIMIT*O+1,?MAX_LIMIT*(O+1)),
-    {ok,[O,Q]}.
-
+    case ets:lookup(?ETS_PIDS_TABLE_NAME,list_to_binary(?PREFIX_KEY ++ "o" ++ integer_to_list(O) ++ ?POSTFIX_KEY)) of
+        [] ->
+            ets:insert(?ETS_PIDS_TABLE_NAME,{
+                list_to_binary(?PREFIX_KEY ++ "o" ++ integer_to_list(O) ++ ?POSTFIX_KEY),
+            self()}),
+	    {ok,[O,Q]};
+        _ ->
+            NQ = restorage(?ETS_KEYS_TABLE_NAME,?MAX_LIMIT*O+1,?MAX_LIMIT*(O+1)),
+            ets:insert(?ETS_PIDS_TABLE_NAME,{
+                list_to_binary(?PREFIX_KEY ++ "o" ++ integer_to_list(O) ++ ?POSTFIX_KEY),
+            self()}),
+            {ok,[O,NQ]}
+    end.
 
 point(N,K) ->
     gen_server:cast(N,{point,K}).
