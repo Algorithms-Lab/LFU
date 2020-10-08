@@ -9,8 +9,8 @@
     point/2,
     reset/2,
     cheat/3,
-    score/3,
-    fetch/4
+    score/2,
+    fetch/3
 ]).
 
 -export([
@@ -52,10 +52,10 @@ reset(N,K) ->
     gen_server:cast(N,{reset,K}).
 cheat(N,K,V) ->
     gen_server:cast(N,{cheat,{K,V}}).
-score(N,P,R) ->
-    gen_server:cast(N,{score,{P,R}}).
-fetch(N,P,R,T) ->
-    gen_server:cast(N,{fetch,{T,P,R}}).
+score(N,R) ->
+    gen_server:cast(N,{score,R}).
+fetch(N,R,T) ->
+    gen_server:cast(N,{fetch,{T,R}}).
 state(N) ->
     gen_server:call(N,state,?TIMEOUT_CALL).
 
@@ -70,11 +70,11 @@ handle_cast({cheat,{K,V}},[O,Q]) ->
 handle_cast({reset,K},[O,Q]) ->
     NQ = reset_handler(K,Q),
     {noreply,[O,NQ]};
-handle_cast({score,{P,R}},[O,Q]) ->
-    score_handler(P,R,Q),
+handle_cast({score,R},[O,Q]) ->
+    score_handler(R,Q),
     {noreply,[O,Q]};
-handle_cast({fetch,{T,P,R}},[O,Q]) ->
-    fetch_handler(T,P,R,O,Q),
+handle_cast({fetch,{T,R}},[O,Q]) ->
+    fetch_handler(T,R,O,Q),
     {noreply,[O,Q]}.
 
 handle_call(state,_From,[O,Q]) ->
@@ -104,15 +104,15 @@ cheat_handler(K,V,Q) ->
 reset_handler(K,Q) ->
     erase(K),
     Q-1.
-score_handler(P,R,Q) ->
-    catch P ! {{score,R},Q}.  %% necessary using client interface function of lfu module for cast message
-fetch_handler(T,P,R,O,Q) ->
+score_handler(R,Q) ->
+    lfu:score(R,Q).
+fetch_handler(T,R,O,Q) ->
     if
         Q > 0 ->
             insert(O,T),
-            catch P ! {{fetch,R},ready};  %% necessary using client interface function of lfu module for cast message
+            lfu:fetch(R,ready);
         true ->
-            catch P ! {{fetch,R},ready}   %% necessary using client interface function of lfu module for cast message
+            lfu:fetch(R,ready)
     end.
 
 

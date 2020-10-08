@@ -9,8 +9,8 @@
     point/2,
     reset/2,
     cheat/3,
-    score/5,
-    fetch/6
+    score/4,
+    fetch/5
 ]).
 
 -export([
@@ -53,10 +53,10 @@ reset(N,K) ->
     gen_server:cast(N,{reset,K}).
 cheat(N,K,V) ->
     gen_server:cast(N,{cheat,{K,V}}).
-score(N,P,R,L,U) ->
-    gen_server:cast(N,{score,{L,U,P,R}}).
-fetch(N,P,R,T,L,U) ->
-    gen_server:cast(N,{fetch,{L,U,T,P,R}}).
+score(N,R,L,U) ->
+    gen_server:cast(N,{score,{L,U,R}}).
+fetch(N,R,T,L,U) ->
+    gen_server:cast(N,{fetch,{L,U,T,R}}).
 state(N) ->
     gen_server:call(N,state,?TIMEOUT_CALL).
 
@@ -71,11 +71,11 @@ handle_cast({cheat,{K,V}},[O,Q]) ->
 handle_cast({reset,K},[O,Q]) ->
     [NO,NQ] = reset_handler(K,O,Q),
     {noreply,[NO,NQ]};
-handle_cast({score,{L,U,P,R}},[O,Q]) ->
-    [NO,NQ] = score_handler(L,U,P,R,O,Q),
+handle_cast({score,{L,U,R}},[O,Q]) ->
+    [NO,NQ] = score_handler(L,U,R,O,Q),
     {noreply,[NO,NQ]};
-handle_cast({fetch,{L,U,T,P,R}},[O,Q]) ->
-    [NO,NQ] = fetch_handler(L,U,T,P,R,O,Q),
+handle_cast({fetch,{L,U,T,R}},[O,Q]) ->
+    [NO,NQ] = fetch_handler(L,U,T,R,O,Q),
     {noreply,[NO,NQ]}.
 
 handle_call(state,_From,[O,Q]) ->
@@ -130,17 +130,17 @@ reset_handler(K,O,Q) ->
         true ->
             [O,Q]
     end.
-score_handler(L,U,P,R,O,Q) ->
+score_handler(L,U,R,O,Q) ->
     C = if O > 0 orelse (L == ?SCORE_OFFSET+1 andalso U == ?MIN_LIMIT*(O+1)) -> Q; true -> scoring(L,U) end,
-    catch P ! {{score,R},C},	%% necessary using client interface function of lfu module for cast message
+    lfu:score(R,C),
     [O,Q].
-fetch_handler(L,U,T,P,R,O,Q) ->
+fetch_handler(L,U,T,R,O,Q) ->
     if
         Q > 0 ->
             insert(L,U,T);
         true -> skip
     end,
-    catch P ! {{fetch,R},ready},%% necessary using client interface function of lfu module for cast message
+    lfu:fetch(R,ready),
     [O,Q].
 
 
