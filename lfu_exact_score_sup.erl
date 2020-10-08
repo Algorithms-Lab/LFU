@@ -19,6 +19,7 @@
 start_link() ->
     supervisor:start_link({local,?MODULE},?MODULE,[]).
 
+
 init(_) ->
    {ok,{
        {simple_one_for_one,10,300},[{
@@ -26,6 +27,7 @@ init(_) ->
            permanent,brutal_kill,worker,[lfu_exact_score]
        }]
    }}.
+
 
 start([O,Q]) ->
     supervisor:start_child(?MODULE,[[O,Q]]).
