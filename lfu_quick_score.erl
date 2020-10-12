@@ -117,10 +117,8 @@ fetch_handler(T,R,O,Q) ->
 
 
 insert(I,T) ->
-    case get_keys(1) of
-        [] -> 1;
-        KL -> ets:insert(T,{I*?MAX_LIMIT,KL})
-    end.
+    KL = get_keys(1),
+    KL =/= andalso ets:insert(T,{I*?MAX_LIMIT,KL}).
 
 restorage(T,L,U) ->
     TL = case ets:info(T) of

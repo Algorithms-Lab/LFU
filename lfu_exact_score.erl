@@ -156,10 +156,8 @@ scoring(L,U) ->
 insert(L,U,T) ->
     for(L,U,
         fun(I) ->
-            case get_keys(I) of
-                [] -> 1;
-                KL -> ets:insert(T,{I,KL})
-            end
+            KL = get_keys(I),
+            KL =/= [] andalso ets:insert(T,{I,KL})
         end
     ).
 
