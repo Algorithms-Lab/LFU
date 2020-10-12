@@ -1,516 +1,483 @@
--module(lfu).
--export([
-    event/2,
-    event/1,
-    alg/0,
-    for/3
-]).
+-module('lfu').
+-author('VSolenkov').
+
+-behaviour('gen_statem').
 
 -export([
-    init/0
+    start_link/0
 ]).
--author('VSolenkov').
--describe('Least Frequently Used').
+-export([
+    point/1,
+    cheat/1,
+    state/0,
+    count/1,
+    score/0,
+    fetch/1,
+    clean/1
+]).
+-export([
+    score/2,
+    fetch/2,
+    clean/2
+]).
+-export([
+    init/1,
+    callback_mode/0
+]).
+-export([
+    common/3,
+    offset/3,
+    select/3,
+    delete/3
+]).
+-export([
+    for/3
+]).
 -include("include/lfu.hrl").
 
 
-event(Event) ->
-    if
-        Event =:= state ->
-            event(Event,[]);
-        Event =:= score ->
-            event(Event,[]);
-        true -> throw(unknow_parameters)
+
+start_link() ->
+    gen_statem:start_link({local,?MODULE},?MODULE,[?MIN_ORDER,0],[]).
+
+
+init(Data) ->
+    {ok,common,Data}.
+
+callback_mode() ->
+    state_functions.
+
+
+point(K) ->
+    gen_statem:cast(?MODULE,{point,K}).
+cheat(KVL) ->
+    case is_list(KVL) of
+        true ->
+            gen_statem:cast(?MODULE,{cheat,KVL});
+        false ->
+            throw(must_be_list)
     end.
-event(Event,Data) ->
-    if
-        Event =:= point ->
-            cast(Event,Data);
-        Event =:= state ->
-            call(Event,Data);
-        Event =:= score ->
-            call(Event,Data);
-        Event =:= count ->
-            call(Event,Data);
-        Event =:= cheat ->
-            case is_list(Data) of
-                true -> cast(Event,Data);
-                _ -> throw(must_be_list)
-            end;
-        Event =:= apply ->
-            case ets:info(Data) of
-                undefined -> throw(unknow_table);
-                _ -> cast(Event,Data)
-            end;
-        Event =:= fetch; Event =:= reset; Event =:= clean ->
-            case ets:info(Data) of
-                undefined -> throw(unknow_table);
-                _ -> call(Event,Data)
-            end;
-        true -> throw(unknow_event)
-    end.
+state() ->
+    gen_statem:call(?MODULE,state).
+count(K) ->
+    gen_statem:call(?MODULE,{count,K}).
+score() ->
+    gen_statem:call(?MODULE,score).
+fetch(T) ->
+    gen_statem:call(?MODULE,{fetch,T}).
+clean(T) ->
+    gen_statem:call(?MODULE,{clean,T}).
+
+score(R,C) ->
+    gen_statem:cast(?MODULE,{{score,R},C}).
+fetch(R,C) ->
+    gen_statem:cast(?MODULE,{{fetch,R},C}).
+clean(R,T) ->
+    gen_statem:cast(?MODULE,{{clean,R},T}).
 
 
-cast(Event,Data) ->
-    cast(?MODULE,Event,Data).
-cast(Module,Event,Data) ->
-    catch whereis(Module) ! {Event,Data}.
-
-call(Event,Data) ->
-    call(?MODULE,Event,Data).
-call(Module,Event,Data) ->
-    Ref = erlang:monitor(process,Module),
-    catch whereis(Module) ! {Event,Data,{Ref,self()}},
-    receive
-        {{Event,Data,Ref},Reply} -> erlang:demonitor(Ref,[flush]),Reply;
-        {'DOWN',Ref,proceess,_Name,_Reason} -> {error,no_proc};
-        Other -> io:format("Other:~p~n",[Other])
-    end.
-
-
-alg() ->
-    register(?MODULE,spawn(?MODULE,init,[])),
-    ?SUPPORT andalso apply(?SECONDARY,alg,[]).
-
-
-init() ->
-    ets:new(?ETS_TABLE_NAME,[named_table,set,public]),
-    loop([?MIN_ORDER,0]).
-
-%% Least Frequently Used
-loop([O,Q]) ->
-    receive
-        {point,K} ->
-            case get(K) of
+common(cast,{point,K},[O,Q]) ->
+    case get(K) of
+        undefined ->
+            N = list_to_atom("o0" ++ integer_to_list(0)),
+            case whereis(N) of
                 undefined ->
-                    N = list_to_atom("o0" ++ integer_to_list(0)),
+                     lfu_exact_score_sup:start([0,0]),
+                     lfu_exact_score:point(N,K);
+                _ ->
+                     lfu_exact_score:point(N,K)
+            end,
+            put(K,1),
+            ets:insert(?ETS_KEYS_TABLE_NAME,{K,1}),
+            ?SUPPORT andalso erlang:apply(?SECONDARY,point,[K]),
+            {keep_state,[O,if ?SCORE_OFFSET == 0 -> Q+1; true -> Q end]};
+        C when C < ?MAX_ORDER ->
+            if
+                %% before MAX LIMIT
+                C div ?MAX_LIMIT == 0 ->
+                    N = list_to_atom("o0" ++ integer_to_list(C div ?MIN_LIMIT)),
                     case whereis(N) of
                         undefined ->
-                            case get(?PREFIX_KEY ++ atom_to_list(N) ++ ?POSTFIX_KEY) of
-                                undefined ->
-                                    put(?PREFIX_KEY ++ atom_to_list(N) ++ ?POSTFIX_KEY,lfu_simple_score:start([0,0])),
-                                    lfu_simple_score:point(N,K);
-                                _ ->
-                                    put(?PREFIX_KEY ++ atom_to_list(N) ++ ?POSTFIX_KEY,lfu_simple_score:start([0,0,reboot,K])),
-                                    lfu_simple_score:cheat(N,K,1)
-                            end;
+                            lfu_exact_score_sup:start([C div ?MIN_LIMIT,0]),
+                            lfu_exact_score:point(N,K);
                         _ ->
-                            lfu_simple_score:point(N,K)
+                            lfu_exact_score:point(N,K)
                     end,
-                    put(K,1),
-                    ets:insert(?ETS_TABLE_NAME,{K,1}),
-                    ?SUPPORT andalso cast(?SECONDARY,point,K),
-                    loop([O,if ?SCORE_OFFSET == 0 -> Q+1; true -> Q end]);
-                C when C < ?MAX_ORDER ->
+                    %% reset
                     if
-                        %% before MAX LIMIT
-                        C div ?MAX_LIMIT == 0 ->
-                            N = list_to_atom("o0" ++ integer_to_list(C div ?MIN_LIMIT)),
-                            case whereis(N) of
+                        C rem ?MIN_LIMIT == 0 ->
+                            NR = list_to_atom("o0" ++ integer_to_list(C div ?MIN_LIMIT - 1)),
+                            case whereis(NR) of
                                 undefined ->
-                                    case get(?PREFIX_KEY ++ atom_to_list(N) ++ ?POSTFIX_KEY) of
-                                        undefined ->
-                                            put(?PREFIX_KEY ++ atom_to_list(N) ++ ?POSTFIX_KEY,lfu_simple_score:start([C div ?MIN_LIMIT,0])),
-                                            lfu_simple_score:point(N,K);
-                                        _ ->
-                                            put(?PREFIX_KEY ++ atom_to_list(N) ++ ?POSTFIX_KEY,lfu_simple_score:start([C div ?MIN_LIMIT,0,reboot,K])),
-                                            lfu_simple_score:cheat(N,K,C+1)
-                                    end;
+                                    lfu_exact_score_sup:start([C div ?MIN_LIMIT - 1,0]),
+                                    lfu_exact_score:reset(NR,K);
                                 _ ->
-                                    lfu_simple_score:point(N,K)
-                            end,
-                            %% reset
-                            if
-                                C rem ?MIN_LIMIT == 0 ->
-                                    NR = list_to_atom("o0" ++ integer_to_list(C div ?MIN_LIMIT - 1)),
-                                    case whereis(NR) of
-                                        undefined ->
-                                            put(?PREFIX_KEY ++ atom_to_list(NR) ++ ?POSTFIX_KEY,lfu_simple_score:start([C div ?MIN_LIMIT - 1,0,reboot])),
-                                            lfu_simple_score:reset(NR,K);
-                                        _ ->
-                                            lfu_simple_score:reset(NR,K)
-                                    end;
-                                true -> skip
-                            end;
-                        %% after MAX LIMIT
-                        C rem ?MAX_LIMIT == 0 ->
-                            N = list_to_atom("o" ++ integer_to_list(C div ?MAX_LIMIT)),
-                            case whereis(N) of
-                                undefined ->
-                                    case get(?PREFIX_KEY ++ atom_to_list(N) ++ ?POSTFIX_KEY) of
-                                        undefined ->
-                                            put(?PREFIX_KEY ++ atom_to_list(N) ++ ?POSTFIX_KEY,lfu_quick_score:start([C div ?MAX_LIMIT,0])),
-                                            lfu_quick_score:point(N,K);
-                                        _ ->
-                                            put(?PREFIX_KEY ++ atom_to_list(N) ++ ?POSTFIX_KEY,lfu_quick_score:start([C div ?MAX_LIMIT,0,reboot,K])),
-                                            lfu_quick_score:cheat(N,K,1)
-                                    end;
-                                _ ->
-                                    lfu_quick_score:point(N,K)
-                            end,
-                            %% reset
-                            if
-                                C div ?MAX_LIMIT > 1 ->
-                                    NR = list_to_atom("o" ++ integer_to_list(C div ?MAX_LIMIT - 1)),
-                                    case whereis(NR) of
-                                        undefined ->
-                                            put(?PREFIX_KEY ++ atom_to_list(NR) ++ ?POSTFIX_KEY,lfu_quick_score:start([C div ?MAX_LIMIT - 1,0,reboot])),
-                                            lfu_quick_score:reset(NR,K);
-                                        _ ->
-                                            lfu_quick_score:reset(NR,K)
-                                    end;
-                                true ->
-                                    NR = list_to_atom("oO" ++ integer_to_list(C div ?MIN_LIMIT - 1)),
-                                    case whereis(NR) of
-                                        undefined ->
-                                            put(?PREFIX_KEY ++ atom_to_list(NR) ++ ?POSTFIX_KEY,lfu_simple_score:start([C div ?MIN_LIMIT - 1,0,reboot])),
-                                            lfu_simple_score:reset(NR,K);
-                                        _ ->
-                                            lfu_simple_score:reset(NR,K)
-                                    end
-                            end;
+                                    lfu_exact_score:reset(NR,K)
+                              end;
                         true -> skip
+                    end;
+                %% after MAX LIMIT
+                C rem ?MAX_LIMIT == 0 ->
+                    N = list_to_atom("o" ++ integer_to_list(C div ?MAX_LIMIT)),
+                    case whereis(N) of
+                        undefined ->
+                            lfu_quick_score_sup:start([C div ?MAX_LIMIT,0]),
+                            lfu_quick_score:point(N,K);
+                        _ ->
+                            lfu_quick_score:point(N,K)
                     end,
-                    put(K,C+1),
-                    ets:insert(?ETS_TABLE_NAME,{K,C+1}),
-                    ?SUPPORT andalso cast(?SECONDARY,point,K),
-                    loop([O,if (C+1) / (?SCORE_OFFSET+1) == 1 -> Q+1; true -> Q end]);
-                _ ->
-                    ?SUPPORT andalso cast(?SECONDARY,point,K),
-                    loop([O,Q])
-            end;
-        {cheat,KVL} ->
-            loop([O,length(lists:filter(
-                fun({K,V}) when V =< ?MAX_ORDER ->
-                    case get(K) of
-                        undefined -> skip;
-                        C ->
-                            if
-                                (C-1) div ?MAX_LIMIT == 0 ->
-                                    NR = list_to_atom("o0" ++ integer_to_list((C-1) div ?MIN_LIMIT)),
-                                    case whereis(NR) of
-                                        undefined ->
-                                            put(?PREFIX_KEY ++ atom_to_list(NR) ++ ?POSTFIX_KEY,lfu_simple_score:start([(C-1) div ?MIN_LIMIT,0,reboot])),
-                                            lfu_simple_score:reset(NR,K);
-                                        _ ->
-                                            lfu_simple_score:reset(NR,K)
-                                    end;
-                                true ->
-                                    NR = list_to_atom("o" ++ integer_to_list((C-1) div ?MAX_LIMIT)),
-                                    case whereis(NR) of
-                                        undefined ->
-                                            put(?PREFIX_KEY ++ atom_to_list(NR) ++ ?POSTFIX_KEY,lfu_quick_score:start([(C-1) div ?MAX_LIMIT,0,reboot])),
-                                            lfu_quick_score:reset(NR,K);
-                                        _ ->
-                                            lfu_quick_score:reset(NR,K)
-                                    end
-                            end
-                     end,
-                     if
-                         V > 0 ->
-                             if
-                                 (V-1) div ?MAX_LIMIT == 0 ->
-                                     for(0,(V-1) div ?MIN_LIMIT,
-                                         fun(I) ->
-                                             N = list_to_atom("o0" ++ integer_to_list(I)),
-                                             case whereis(N) of
-                                                 undefined ->
-                                                     case get(?PREFIX_KEY ++ atom_to_list(N) ++ ?POSTFIX_KEY) of
-                                                         undefined ->
-                                                             put(?PREFIX_KEY ++ atom_to_list(N) ++ ?POSTFIX_KEY,lfu_simple_score:start([I,0]));
-                                                         _ ->
-                                                             put(?PREFIX_KEY ++ atom_to_list(N) ++ ?POSTFIX_KEY,lfu_simple_score:start([I,0,reboot,K]))
-                                                     end;
-                                                 _ -> skip
-                                             end,
-                                             if
-                                                 I == (V-1) div ?MIN_LIMIT ->
-                                                     lfu_simple_score:cheat(N,K,V);
-                                                 true -> skip
-                                             end
-                                         end
-                                     );
-                                 true ->
-                                     for(0,(?MAX_LIMIT-1) div ?MIN_LIMIT,
-                                         fun(I) ->
-                                             N = list_to_atom("o0" ++ integer_to_list(I)),
-                                             case whereis(N) of
-                                                 undefined ->
-                                                     case get(?PREFIX_KEY ++ atom_to_list(N) ++ ?POSTFIX_KEY) of
-                                                         undefined ->
-                                                             put(?PREFIX_KEY ++ atom_to_list(N) ++ ?POSTFIX_KEY,lfu_simple_score:start([I,0]));
-                                                         _ ->
-                                                             put(?PREFIX_KEY ++ atom_to_list(N) ++ ?POSTFIX_KEY,lfu_simple_score:start([I,0,reboot]))
-                                                     end;
-                                                 _ -> skip
-                                             end
-                                         end
-                                     ),
-                                     for(1,(V-1) div ?MAX_LIMIT,
-                                         fun(I) ->
-				             N = list_to_atom("o" ++ integer_to_list(I)),
-                                             case whereis(N) of
-                                                 undefined ->
-                                                     case get(?PREFIX_KEY ++ atom_to_list(N) ++ ?POSTFIX_KEY) of
-                                                         undefined ->
-                                                             put(?PREFIX_KEY ++ atom_to_list(N) ++ ?POSTFIX_KEY,lfu_quick_score:start([I,0]));
-                                                         _ ->
-                                                             put(?PREFIX_KEY ++ atom_to_list(N) ++ ?POSTFIX_KEY,lfu_quick_score:start([I,0,reboot,K]))
-                                                     end;
-                                                 _ -> skip
-                                             end,
-                                             if
-                                                 I == (V-1) div ?MAX_LIMIT ->
-                                                     lfu_quick_score:cheat(N,K,1);
-                                                 true -> skip
-                                             end
-                                         end
-                                     )
-                             end;
-                         true -> skip
-                     end,
-                     case get(clean) of
-                         undefined -> put(clean,0);
-                         _ -> skip
-                     end,
-                     case get(K) of
-                         undefined ->
-                             if
-                                 V > 0 ->
-                                     put(K,V),
-                                     ets:insert(?ETS_TABLE_NAME,{K,V}),
-                                     if
-                                         V > ?SCORE_OFFSET -> true;
-                                         true -> false
-                                     end;
-                                 true -> false
-                             end;
-                         OV ->
-                             if
-                                 V > 0 ->
-                                     put(K,V),
-                                     ets:insert(?ETS_TABLE_NAME,{K,V}),
-                                     if
-                                         OV =< ?SCORE_OFFSET andalso V > ?SCORE_OFFSET -> true;
-                                         true -> false
-                                     end;
-                                 true ->
-                                     if
-                                         OV > ?SCORE_OFFSET ->
-                                             erase(K),ets:delete(?ETS_TABLE_NAME,K),put(clean,get(clean)+1),false;
-                                         true ->
-                                             erase(K),ets:delete(?ETS_TABLE_NAME,K),false
-                                     end
-                             end
-                     end;
-                (_) ->
-                     false
-                end,
-            KVL))+Q-erase(clean)]);
-        {count,K,{Ref,Pid}} ->
-            catch Pid ! {{count,K,Ref},get(K)},
-            loop([O,Q]);
-        {state,Stub,{Ref,Pid}} ->
-            catch Pid ! {{state,Stub,Ref},[O,Q]},
-            loop([O,Q]);
-        {score,Stub,{Ref,Pid}} ->
-            NO = offset(O,Q,null,null,null),
-            catch Pid ! {{score,Stub,Ref},ready},
-            loop([NO,Q]);
-        {fetch,TID,{Ref,Pid}} ->
-            NO = offset(O,Q,null,null,null),
-            collect(NO*10,TID),
-            catch Pid ! {{fetch,TID,Ref},ready},
-            loop([NO,Q]);
-        {reset,TID,{Ref,Pid}} ->
-            NQ = reset(TID,Q),
-            catch Pid ! {{reset,TID,Ref},ready},
-            loop([O,NQ]);
-        {reset,TID} ->
-            NQ = reset(TID,Q),
-            loop([O,NQ]);
-        {clean,TID,{Ref,Pid}} ->
-            NO = offset(O,Q,null,null,null),
-            collect(NO*10,TID),
-            catch Pid ! {{clean,TID,Ref},ready},
-            clean_loop([NO,Q,TID]);
-        {apply,_TID} ->
-            loop([O,Q]);
-        {apply,_TID,{_Ref,_PidID}} ->
-            loop([O,Q])
-    end.
-
-clean_loop([O,Q,TID]) ->
-    receive
-        {apply,TID} ->
-            NQ = reset(TID,Q),
-            ?SUPPORT andalso cast(?SECONDARY,reset,TID),
-            loop([O,NQ]);
-        {apply,TID,{Ref,Pid}} ->
-            NQ = reset(TID,Q),
-            ?SUPPORT andalso call(?SECONDARY,reset,TID),
-            catch Pid ! {{apply,TID,Ref},ready},
-            loop([O,NQ])
-    after ?TIMEOUT_CLEAN ->
-        loop([O,Q])
-    end.
-
-
-offset(O,Q,P0,C0,F0) ->
-    P = if P0 =/= null -> P0; true -> count(?SCORE_OFFSET,O) end,
-    C = if C0 =/= null -> C0; true -> count(O,O*10) + P end,
-    F = if F0 =/= null -> F0; true -> count(O*10,O*100) + C end,
-    io:format("P:~p~nC:~p~nF:~p~nO:~p~nQ~p~n",[P,C,F,O,Q]),
-    if
-        Q < 1 -> O;
-        C / Q * 100 < ?MIN_OFFSET andalso O*10 =< ?MAX_ORDER andalso F / Q * 100 =< ?MAX_OFFSET -> offset(O*10,Q,C,F,null);
-        C / Q * 100 > ?MAX_OFFSET andalso O div 10 >= ?MIN_ORDER andalso P / Q * 100 >= ?MIN_OFFSET -> offset(O div 10,Q,null,P,C);
-        true -> O
-    end.
-
-count(L,U) ->
-    put(counter,0.0),
-    Ref = make_ref(),
-    if
-        U =< ?MAX_LIMIT ->
-            for(L div ?MIN_LIMIT,(U-1) div ?MIN_LIMIT,
-                fun(I) ->
-                    case whereis(list_to_atom("o0" ++ integer_to_list(I))) of
-                        undefined -> "skip";
-                        N ->
-                            if
-                                U >= ?MIN_LIMIT*(I+1) ->
-                                    if
-                                        I == 0 ->
-                                            lfu_simple_score:score(N,Ref,self(),L+1,?MIN_LIMIT*(I+1));
-                                        true ->
-                                            lfu_simple_score:score(N,Ref,self(),?MIN_LIMIT*I+1,?MIN_LIMIT*(I+1))
-                                    end;
-                                true ->
-                                    lfu_simple_score:score(N,Ref,self(),L+1,U)
-                            end
-%                               if
-%                                   I == 0 ->
-%                                       if
-%                                           U > ?MIN_LIMIT*(I+1) ->
-%                                               lfu_simple_score:score(N,Ref,self(),L+1,?MIN_LIMIT*(I+1));
-%                                           true ->
-%                                               lfu_simple_score:score(N,Ref,self(),L+1,U)
-%                                       end;
-%                                   true ->
-%                                       lfu_simple_score:score(N,Ref,self(),?MIN_LIMIT*I+1,?MIN_LIMIT*(I+1))
-%                               end
-                    end
-                end
-            ),
-            count_loop([length(grep(foreach(L div ?MIN_LIMIT,(U-1) div ?MIN_LIMIT,fun(I) -> I end),
-                fun(I) ->
-                    case whereis(list_to_atom("o0" ++ integer_to_list(I))) of undefined -> false; _ -> true end
-                end
-            )),Ref,score]);
-        true ->
-            for(L div ?MIN_LIMIT,(?MAX_LIMIT-1) div ?MIN_LIMIT,
-                fun(I) ->
-                    case whereis(list_to_atom("o0" ++ integer_to_list(I))) of
-                        undefined -> "skip";
-                        N ->
-                            if
-                                U >= ?MIN_LIMIT*(I+1) ->
-                                    if
-                                        I == 0 ->
-                                            lfu_simple_score:score(N,Ref,self(),L+1,?MIN_LIMIT*(I+1));
-                                        true ->
-                                            lfu_simple_score:score(N,Ref,self(),?MIN_LIMIT*I+1,?MIN_LIMIT*(I+1))
-                                    end;
-                                true ->	%% never hit in this branch
-                                    lfu_simple_score:score(N,Ref,self(),L+1,U)
-                            end
-%                               if
-%                                   I == 0 ->
-%                                       lfu_simple_score:score(N,Ref,self(),L+1,?MIN_LIMIT*(I+1));
-%                                   true ->
-%                                       lfu_simple_score:score(N,Ref,self(),?MIN_LIMIT*I+1,?MIN_LIMIT*(I+1))
-%                               end
-                    end
-                end
-            ),
-            count_loop([length(grep(foreach(L div ?MIN_LIMIT,(?MAX_LIMIT-1) div ?MIN_LIMIT,fun(I) -> I end),
-                fun(I) ->
-                    case whereis(list_to_atom("o0" ++ integer_to_list(I))) of undefined -> false; _ -> true end
-                end
-            )),Ref,score]),
-
-            for(if L div ?MAX_LIMIT > 0 -> L div ?MAX_LIMIT; true -> 1 end,U div ?MAX_LIMIT - 1,
-                fun(I) ->
-                    case whereis(list_to_atom("o" ++ integer_to_list(I))) of undefined -> "skip"; N -> lfu_quick_score:score(N,Ref,self()) end
-                end
-            ),
-            count_loop([length(grep(foreach(if L div ?MAX_LIMIT > 0 -> L div ?MAX_LIMIT; true -> 1 end,U div ?MAX_LIMIT - 1,fun(I) -> I end),
-                fun(I) ->
-                    case whereis(list_to_atom("o" ++ integer_to_list(I))) of undefined -> false; _ -> true end
-                end
-            )),Ref,score])
-    end,
-    list_to_integer(float_to_list(erase(counter),[{decimals,0}])).
-
-count_loop([Q,R,C]) ->
-    if
-        Q > 0 ->
-            receive
-                {{C,R},Reply} when C =:= score ->
-                    put(counter,get(counter)+Reply),
-                    if Q > 1 -> count_loop([Q-1,R,C]); true -> "skip" end;
-                {{C,R},ready} when C =:= fetch ->
-                    if Q > 1 -> count_loop([Q-1,R,C]); true -> "skip" end
-            after ?TIMEOUT_COUNT ->
-                io:format("+!!!!!TIMEOUT!!!!!+:~p~n",[Q]),
-                "skip"
-            end;
-        true -> "skip"
-    end.
-
-reset(TID,Q) ->
-    TL = case ets:info(TID) of
-        undefined -> [];
-        _ -> ets:tab2list(TID)
-    end,
-    put(reset,0),
-    lists:foreach(
-        fun({_,KL}) ->
-            lists:foreach(
-                fun(K) ->
-                    ets:delete(?ETS_TABLE_NAME,K),
-                    C = erase(K),
+                    %% reset
                     if
-                        (C-1) div ?MAX_LIMIT == 0 ->
-                            N  = list_to_atom("o0" ++ integer_to_list((C-1) div ?MIN_LIMIT)),
-                            case whereis(N) of
+                        C div ?MAX_LIMIT > 1 ->
+                            NR = list_to_atom("o" ++ integer_to_list(C div ?MAX_LIMIT - 1)),
+                            case whereis(NR) of
                                 undefined ->
-                                    put(?PREFIX_KEY ++ N ++ ?POSTFIX_KEY,lfu_simple_score:start([(C-1) div ?MIN_LIMIT,0,reboot])),
-                                    lfu_simple_score:reset(N,K);
+                                    lfu_quick_score_sup:start([C div ?MAX_LIMIT - 1,0]),
+                                    lfu_quick_score:reset(NR,K);
                                 _ ->
-                                    lfu_simple_score:reset(N,K)
+                                    lfu_quick_score:reset(NR,K)
                             end;
                         true ->
-                            N = list_to_atom("o" ++ integer_to_list((C-1) div ?MAX_LIMIT)),
-                            case whereis(N) of
+                            NR = list_to_atom("o0" ++ integer_to_list(C div ?MIN_LIMIT - 1)),
+                            case whereis(NR) of
                                 undefined ->
-                                    put(?PREFIX_KEY ++ N ++ ?POSTFIX_KEY,lfu_quick_score:start([(C-1) div ?MAX_LIMIT,0,reboot])),
-                                    lfu_quick_score:reset(N,K);
+                                    lfu_quick_score_sup:start([C div ?MIN_LIMIT - 1,0]),
+                                    lfu_exact_score:reset(NR,K);
                                 _ ->
-                                    lfu_simple_score:reset(N,K)
+                                    lfu_exact_score:reset(NR,K)
                             end
-                    end,
-                    put(reset,get(reset)+1)
-                end,
-            KL)
+                    end;
+                true -> skip
+            end,
+            put(K,C+1),
+            ets:insert(?ETS_KEYS_TABLE_NAME,{K,C+1}),
+            ?SUPPORT andalso erlang:apply(?SECONDARY,point,[K]),
+            {keep_state,[O,if (C+1) / (?SCORE_OFFSET+1) == 1 -> Q+1; true -> Q end]};
+        _ ->
+            ?SUPPORT andalso erlang:apply(?SECONDARY,point,[K]),
+            {keep_state,[O,Q]}
+    end;
+common(cast,{cheat,KVL},[O,Q]) ->
+    NQ = length(lists:filter(
+        fun({K,V}) when V =< ?MAX_ORDER ->
+            case get(K) of
+                undefined -> skip;
+                C ->
+                    if
+                        (C-1) div ?MAX_LIMIT == 0 ->
+                            NR = list_to_atom("o0" ++ integer_to_list((C-1) div ?MIN_LIMIT)),
+                            case whereis(NR) of
+                                undefined ->
+                                    lfu_exact_score_sup:start([(C-1) div ?MIN_LIMIT,0]),
+                                    lfu_exact_score:reset(NR,K);
+                                _ ->
+                                    lfu_exact_score:reset(NR,K)
+                            end;
+                        true ->
+                            NR = list_to_atom("o" ++ integer_to_list((C-1) div ?MAX_LIMIT)),
+                            case whereis(NR) of
+                                undefined ->
+                                    lfu_quick_score:start([(C-1) div ?MAX_LIMIT,0]),
+                                    lfu_quick_score:reset(NR,K);
+                                _ ->
+                                    lfu_quick_score:reset(NR,K)
+                            end
+                    end
+            end,
+            if
+                V > 0 ->
+                    if
+                        (V-1) div ?MAX_LIMIT == 0 ->
+                            for(0,(V-1) div ?MIN_LIMIT,
+                                fun(I) ->
+                                    N = list_to_atom("o0" ++ integer_to_list(I)),
+                                    case whereis(N) of
+                                        undefined ->
+                                            lfu_exact_score_sup:start([I,0]);
+                                        _ -> skip
+                                    end,
+                                    if
+                                        I == (V-1) div ?MIN_LIMIT ->
+                                            lfu_exact_score:cheat(N,K,V);
+                                        true -> skip
+                                    end
+                                end
+                            );
+                        true ->
+                            for(0,(V-1) div ?MIN_LIMIT,
+                                fun(I) ->
+                                    N = list_to_atom("o0" ++ integer_to_list(I)),
+                                    case whereis(N) of
+                                        undefined ->
+                                            lfu_exact_score_sup:start([I,0]);
+                                        _ -> skip
+                                    end
+                                end
+                            ),
+                            for(1,(V-1) div ?MAX_LIMIT,
+                                fun(I) ->
+	                            N = list_to_atom("o" ++ integer_to_list(I)),
+                                    case whereis(N) of
+                                        undefined ->
+                                            lfu_quick_score_sup:start([I,0]);
+                                        _ -> skip
+                                    end,
+                                    if
+                                        I == (V-1) div ?MAX_LIMIT ->
+                                            lfu_quick_score:cheat(N,K,1);
+                                        true -> skip
+                                    end
+                                end
+                            )
+                     end;
+                true -> skip
+            end,
+            case get(clean) of
+                undefined -> put(clean,0);
+                _ -> skip
+            end,
+            case get(K) of
+                undefined ->
+                    if
+                        V > 0 ->
+                            put(K,V),
+                            ets:insert(?ETS_KEYS_TABLE_NAME,{K,V}),
+                            if
+                                V > ?SCORE_OFFSET -> true;
+                                true -> false
+                            end;
+                        true -> false
+                    end;
+                OV ->
+                    if
+                        V > 0 ->
+                            put(K,V),
+                            ets:insert(?ETS_KEYS_TABLE_NAME,{K,V}),
+                            if
+                                OV =< ?SCORE_OFFSET andalso V > ?SCORE_OFFSET -> true;
+                                true -> false
+                            end;
+                        true ->
+                            if
+                                OV > ?SCORE_OFFSET ->
+                                    erase(K),ets:delete(?ETS_KEYS_TABLE_NAME,K),put(clean,get(clean)+1),false;
+                                true ->
+                                    erase(K),ets:delete(?ETS_KEYS_TABLE_NAME,K),false
+                            end
+                    end
+            end;
+        (_) ->
+            false
         end,
-    TL),
-    Q - erase(reset).
+    KVL))+Q-erase(clean),
+    {keep_state,[O,NQ]};
+common({call,From},{count,K},[O,Q]) ->
+    {keep_state,[O,Q],[{reply,From,get(K)}]};
+common({call,From},state,[O,Q]) ->
+    {keep_state,[O,Q],[{reply,From,[O,Q]}]};
+common({call,From},score,[O,Q]) ->
+    {next_state,offset,[O,Q,#{from => From, order => score}],[{next_event,internal,{score,{previous,{?SCORE_OFFSET,O}}}}]};
+common({call,From},{fetch,T},[O,Q]) ->
+    {next_state,offset,[O,Q,#{from => From, tid => T, order => fetch}],[{next_event,internal,{score,{previous,{?SCORE_OFFSET,O}}}}]};
+common({call,From},{clean,T},[O,Q]) ->
+    {next_state,offset,[O,Q,#{from => From, tid => T, order => clean}],[{next_event,internal,{score,{previous,{?SCORE_OFFSET,O}}}}]};
+common(cast,{reset,T},[O,Q]) ->
+    NQ = resetting(T,Q),
+    {keep_state,[O,NQ]};
+common({call,From},{reset,T},[O,Q]) ->
+    NQ = resetting(T,Q),
+    {keep_state,[O,NQ],[{reply,From,ready}]};
+common(cast,{{score,_R},_S},_State) ->
+    keep_state_and_data;
+common(cast,{{fetch,_R},ready},_State) ->
+    keep_state_and_data;
+common(cast,{{clean,_R},_T},_State) ->
+    keep_state_and_data;
+common(cast,EventContent,_State) ->
+    io:format('State: common~nEventType: cast~nEventContent: ~p~n',[EventContent]),
+    keep_state_and_data;
+common(info,_EventContent,_State) ->
+    keep_state_and_data.
+
+offset(internal,{score,{Step,{L,U}}},[O,Q,MD]) ->
+    R = make_ref(),
+    N = scoring(L,U,R),
+    io:format("State:~p~nCommand:~p~nO:~p~nQ:~p~nL:~p~nU:~p~nStep:~p~nN:~p~nMD~p~n~n",[offset,score,O,Q,L,U,Step,N,MD]),
+    if
+        N > 0 ->
+            {keep_state,[O,Q,MD#{number => N, step => Step, ref => R}],[{state_timeout,?TIMEOUT_STATE_OFFSET,Step}]};
+        true ->
+            {keep_state,[O,Q,MD#{number => N, step => Step, ref => R}],[{state_timeout,0,Step}]}
+    end;
+offset(state_timeout,Step,[O,Q,#{step := Step} = MD]) ->
+    io:format("TimeoutState:~p~nMD:~p~nO:~p~nQ~p~n~n",[offset,MD,O,Q]),
+    if
+        Step =:= previous ->
+            case maps:is_key(current,MD) of
+                false ->
+                    {keep_state,[O,Q,MD#{Step => maps:get(Step,MD,0)}],[{next_event,internal,{score,{current,{O,O*10}}}}]};
+                true ->
+                    {keep_state,[O,Q,MD#{Step => maps:get(Step,MD,0) + maps:get(current,MD)}],[{next_event,internal,count}]}
+            end;
+        Step =:= current ->
+            {keep_state,[O,Q,MD#{Step => maps:get(Step,MD,0) + maps:get(previous,MD)}],[{next_event,internal,{score,{following,{O*10,O*100}}}}]};
+        Step =:= following ->
+            {keep_state,[O,Q,MD#{Step => maps:get(Step,MD,0) + maps:get(current,MD)}],[{next_event,internal,count}]}
+    end;
+offset(cast,{{score,R},S},[O,Q,#{number := N, step := Step, ref := R} = MD]) ->
+    if
+        N > 1 ->
+            {keep_state,[O,Q,MD#{Step => S + maps:get(Step,MD,0), number => N-1}],[{state_timeout,?TIMEOUT_STATE_OFFSET,Step}]};
+        true ->
+            if
+                Step =:= previous ->
+                    case maps:is_key(current,MD) of
+                        false ->
+                            {keep_state,[O,Q,MD#{Step => S + maps:get(Step,MD,0)}],[{state_timeout,cancel},{next_event,internal,{score,{current,{O,O*10}}}}]};
+                        true ->
+                            {keep_state,[O,Q,MD#{Step => S + maps:get(Step,MD,0)}],[{state_timeout,cancel},{next_event,internal,count}]}
+                    end;
+                Step =:= current ->
+                    {keep_state,[O,Q,MD#{Step => S + maps:get(Step,MD,0) + maps:get(previous,MD)}],[{state_timeout,cancel},{next_event,internal,{score,{following,{O*10,O*100}}}}]};
+                Step =:= following ->
+                    {keep_state,[O,Q,MD#{Step => S + maps:get(Step,MD,0) + maps:get(current,MD)}],[{state_timeout,cancel},{next_event,internal,count}]}
+            end
+    end;
+offset(internal,count,[O,Q,#{previous := P, current := C, following := F, from := From, order := Order} = MD]) ->
+    io:format("State:~p~nCommand:~p~nP:~p~nC:~p~nF:~p~nO:~p~nQ~p~n~n",[offset,count,P,C,F,O,Q]),
+    if
+        Q < 1 ->
+            if
+                Order =:= score ->
+                    {next_state,common,[O,Q],[{reply,From,ready}]};
+                Order =:= fetch ->
+                    {next_state,select,[O,Q,#{from => From, tid => maps:get(tid,MD), order => fetch}],[{next_event,internal,fetch}]};
+                Order =:= clean ->
+                    {next_state,select,[O,Q,#{from => From, tid => maps:get(tid,MD), order => clean}],[{next_event,internal,fetch}]}
+            end;
+        C / Q * 100 < ?MIN_OFFSET andalso O*10 =< ?MAX_ORDER andalso F / Q * 100 =< ?MAX_OFFSET ->
+            {keep_state,[O*10,Q,MD#{previous => C, current => F, following => 0}],[{next_event,internal,{score,{following,{O*100,O*1000}}}}]};
+        C / Q * 100 > ?MAX_OFFSET andalso O div 10 >= ?MIN_ORDER andalso P / Q * 100 >= ?MIN_OFFSET ->
+            {keep_state,[O div 10,Q,MD#{previous => 0, current => P, following => C}],[{next_event,internal,{score,{previous,{?SCORE_OFFSET,O div 10}}}}]};
+        true ->
+            if
+                Order =:= score ->
+                    {next_state,common,[O,Q],[{reply,From,ready}]};
+                Order =:= fetch ->
+                    {next_state,select,[O,Q,#{from => From, tid => maps:get(tid,MD), order => fetch}],[{next_event,internal,fetch}]};
+                Order =:= clean ->
+                    {next_state,select,[O,Q,#{from => From, tid => maps:get(tid,MD), order => clean}],[{next_event,internal,fetch}]}
+            end
+    end;
+offset(cast,{{score,_},_S},_State) ->
+    keep_state_and_data;
+offset(info,_EventContent,_State) ->
+    keep_state_and_data;
+offset(cast,{{fetch,_R},_S},_State) ->
+    keep_state_and_data;
+offset(cast,{{clean,_R},_T},_State) ->
+    keep_state_and_data;
+offset(cast,{point,_K},_State) ->
+    {keep_state_and_data,[postpone]};
+offset(cast,{cheat,_KVL},_State) ->
+    {keep_state_and_data,[postpone]};
+offset({call,_From},{count,_K},_State) ->
+    {keep_state_and_data,[postpone]};
+offset({call,_From},state,_State) ->
+    {keep_state_and_data,[postpone]};
+offset({call,_From},score,_State) ->
+    {keep_state_and_data,[postpone]};
+offset({call,_From},{fetch,_T},_State) ->
+    {keep_state_and_data,[postpone]};
+offset({call,_From},{clean,_T},_State) ->
+    {keep_state_and_data,[postpone]}.
+
+select(internal,fetch,[O,Q,#{tid := T} = MD]) ->
+    io:format("State:~p~nCommand:~p~nMD:~p~nO:~p~nQ~p~n~n",[select,fetch,MD,O,Q]),
+    R = make_ref(),
+    N = fetching(O*10,T,R),
+    if
+        N > 0 ->
+            {keep_state,[O,Q,MD#{number => N, ref => R}],[{state_timeout,?TIMEOUT_STATE_SELECT,T}]};
+        true ->
+            {keep_state,[O,Q,MD#{number => N, ref => R}],[{state_timeout,0,T}]}
+    end;
+select(state_timeout,T,[O,Q,#{tid := T, from := From, order := Order} = MD]) ->
+    io:format("TimeoutState:~p~nMD:~p~nO:~p~nQ~p~n~n",[select,MD,O,Q]),
+    if
+        Order =:= fetch ->
+            {next_state,common,[O,Q],[{reply,From,ready}]};
+        Order =:= clean ->
+            {next_state,delete,[O,Q,#{tid => T}],[{reply,From,ready},{state_timeout,?TIMEOUT_STATE_DELETE,T}]}
+    end;
+select(cast,{{fetch,R},ready},[O,Q,#{number := N, tid := T, from := From, order := Order, ref := R} = MD]) ->
+    if
+        N > 1 ->
+            {keep_state,[O,Q,MD#{number => N - 1, ref => R}],[{state_timeout,?TIMEOUT_STATE_SELECT,T}]};
+        true ->
+            if
+                Order =:= fetch ->
+                    {next_state,common,[O,Q],[{reply,From,ready}]};
+                Order =:= clean ->
+                    R1 = make_ref(),
+                    {next_state,delete,[O,Q,#{tid => T, ref => R1}],[{reply,From,R1},{state_timeout,?TIMEOUT_STATE_DELETE,T}]}
+            end
+    end;
+select(cast,{{fetch,_R},ready},_State) ->
+    keep_state_and_data;
+select(cast,{{score,_R},_S},_State) ->
+    keep_state_and_data;
+select(info,_EventContent,_State) ->
+    keep_state_and_data;
+select(cast,{{clean,_R},_T},_State) ->
+    keep_state_and_data;
+select(cast,{point,_K},_State) ->
+    {keep_state_and_data,[postpone]};
+select(cast,{cheat,_KVL},_State) ->
+    {keep_state_and_data,[postpone]};
+select({call,_From},{count,_K},_State) ->
+    {keep_state_and_data,[postpone]};
+select({call,_From},state,_State) ->
+    {keep_state_and_data,[postpone]};
+select({call,_From},score,_State) ->
+    {keep_state_and_data,[postpone]};
+select({call,_From},{fetch,_T},_State) ->
+    {keep_state_and_data,[postpone]};
+select({call,_From},{clean,_T},_State) ->
+    {keep_state_and_data,[postpone]}.
+
+delete(state_timeout,T,[O,Q,#{tid := T, ref := _R}]) ->
+    io:format("TimeoutState:~p~nT:~p~nO:~p~nQ~p~n~n",[select,T,O,Q]),
+    {next_state,common,[O,Q]};
+delete(cast,{{clean,R},T},[O,Q,#{tid := T, ref := R}]) ->
+    NQ = resetting(T,Q),
+    ?SUPPORT andalso erlang:apply(?SECONDARY,reset,[T]),
+    {next_state,common,[O,NQ]};
+delete(cast,{{clean,_R},_T},_State) ->
+    keep_state_and_data;
+delete(cast,{{fetch,_R},ready},_State) ->
+    keep_state_and_data;
+delete(cast,{{score,_R},_S},_State) ->
+    keep_state_and_data;
+delete(info,_EventContent,_State) ->
+    keep_state_and_data;
+delete(cast,{point,_K},_State) ->
+    {keep_state_and_data,[postpone]};
+delete(cast,{cheat,_KVL},_State) ->
+    {keep_state_and_data,[postpone]};
+delete({call,_From},{count,_K},_State) ->
+    {keep_state_and_data,[postpone]};
+delete({call,_From},state,_State) ->
+    {keep_state_and_data,[postpone]};
+delete({call,_From},score,_State) ->
+    {keep_state_and_data,[postpone]};
+delete({call,_From},{fetch,_T},_State) ->
+    {keep_state_and_data,[postpone]};
+delete({call,_From},{clean,_T},_State) ->
+    {keep_state_and_data,[postpone]}.
 
 
-collect(O,TID) ->
-    Ref = make_ref(),
+fetching(O,T,R) ->
     if
         (O-1) div ?MAX_LIMIT == 0 ->
             for(0,(O-1) div ?MIN_LIMIT,
@@ -519,7 +486,7 @@ collect(O,TID) ->
                     case whereis(N) of
                         undefined -> skip;
                         _ ->
-                            lfu_simple_score:fetch(N,Ref,self(),TID,
+                            lfu_exact_score:fetch(N,R,T,
                                 if
                                     I == 0 ->
                                         ?SCORE_OFFSET+1;
@@ -534,11 +501,14 @@ collect(O,TID) ->
                     end
                 end
             ),
-            count_loop([length(grep(foreach(0,(O-1) div ?MIN_LIMIT,fun(I) -> I end),
+            length(lists:filter(
                 fun(I) ->
-                    case whereis(list_to_atom("o0" ++ integer_to_list(I))) of undefined -> false; _ -> true end
-                end
-            )),Ref,fetch]);
+                    case whereis(list_to_atom("o0" ++ integer_to_list(I))) of
+                        undefined -> false;
+                        _ -> true
+                    end
+                end,
+            lists:seq(0,(O-1) div ?MIN_LIMIT)));
         true ->
             for(0,(?MAX_LIMIT-1) div ?MIN_LIMIT,
                 fun(I) ->
@@ -546,7 +516,7 @@ collect(O,TID) ->
                     case whereis(N) of
                         undefined -> skip;
                         _ ->
-                            lfu_simple_score:fetch(N,Ref,self(),TID,
+                            lfu_exact_score:fetch(N,R,T,
                                 if
                                     I == 0 ->
                                         ?SCORE_OFFSET+1;
@@ -561,11 +531,14 @@ collect(O,TID) ->
                     end
                 end
             ),
-            count_loop([length(grep(foreach(0,(?MAX_LIMIT-1) div ?MIN_LIMIT,fun(I) -> I end),
+            L1 = length(lists:filter(
                 fun(I) ->
-                    case whereis(list_to_atom("o0" ++ integer_to_list(I))) of undefined -> false; _ -> true end
-                end
-            )),Ref,fetch]),
+                    case whereis(list_to_atom("o0" ++ integer_to_list(I))) of
+                        undefined -> false;
+                        _ -> true
+                    end
+                end,
+            lists:seq(0,(?MAX_LIMIT-1) div ?MIN_LIMIT))),
 
             for(1,(O-1) div ?MAX_LIMIT,
                 fun(I) ->
@@ -573,24 +546,140 @@ collect(O,TID) ->
                     case whereis(N) of
                         undefined -> skip;
                         _ ->
-                            lfu_quick_score:fetch(N,Ref,self(),TID)
+                            lfu_quick_score:fetch(N,R,T)
                     end
                 end
             ),
-            count_loop([length(grep(foreach(1,(O-1) div ?MAX_LIMIT,fun(I) -> I end),
+            L2 = length(lists:filter(
                 fun(I) ->
-                    case whereis(list_to_atom("o" ++ integer_to_list(I))) of undefined -> false; _ -> true end
-                end
-            )),Ref,fetch])
+                    case whereis(list_to_atom("o" ++ integer_to_list(I))) of
+                        undefined -> false;
+                        _ -> true
+                    end
+                end,
+            lists:seq(1,(O-1) div ?MAX_LIMIT))),
+            L1 + L2
     end.
 
-foreach(N,N,F) -> [F(N)];
-foreach(I,N,_) when I > N -> [];
-foreach(I,N,F) -> [F(I)|foreach(I+1,N,F)].
+scoring(L,U,R) ->
+    if
+        U =< ?MAX_LIMIT ->
+            for(L div ?MIN_LIMIT,(U-1) div ?MIN_LIMIT,
+                fun(I) ->
+                    case whereis(list_to_atom("o0" ++ integer_to_list(I))) of
+                        undefined ->
+                            skip;
+                        N ->
+                            if
+                                I == 0 ->
+                                    if
+                                        U > ?MIN_LIMIT*(I+1) ->
+                                            lfu_exact_score:score(N,R,L+1,?MIN_LIMIT*(I+1));
+                                        true ->
+                                            lfu_exact_score:score(N,R,L+1,U)
+                                    end;
+                                true ->
+                                    lfu_exact_score:score(N,R,?MIN_LIMIT*I+1,?MIN_LIMIT*(I+1))
+                            end
+                    end
+                end
+            ),
+            length(lists:filter(
+                fun(I) ->
+                    case whereis(list_to_atom("o0" ++ integer_to_list(I))) of
+                        undefined -> false;
+                        _ -> true
+                    end
+                end,
+            lists:seq(L div ?MIN_LIMIT,(U-1) div ?MIN_LIMIT)));
+        true ->
+            for(L div ?MIN_LIMIT,(?MAX_LIMIT-1) div ?MIN_LIMIT,
+                fun(I) ->
+                    case whereis(list_to_atom("o0" ++ integer_to_list(I))) of
+                        undefined ->
+                            skip;
+                        N ->
+                            if
+                                I == 0 ->
+                                    lfu_exact_score:score(N,R,L+1,?MIN_LIMIT*(I+1));
+                                true ->
+                                    lfu_exact_score:score(N,R,?MIN_LIMIT*I+1,?MIN_LIMIT*(I+1))
+                            end
+                    end
+                end
+            ),
+            L1 =
+                if
+                    L < ?MAX_LIMIT ->
+                        length(lists:filter(
+                            fun(I) ->
+                                case whereis(list_to_atom("o0" ++ integer_to_list(I))) of
+                                    undefined -> false;
+                                    _ -> true
+                                end
+                            end,
+                         lists:seq(L div ?MIN_LIMIT,(?MAX_LIMIT-1) div ?MIN_LIMIT)));
+                     true -> 0
+                 end,
+
+            for(if L div ?MAX_LIMIT > 0 -> L div ?MAX_LIMIT; true -> 1 end,U div ?MAX_LIMIT - 1,
+                fun(I) ->
+                    case whereis(list_to_atom("o" ++ integer_to_list(I))) of
+                        undefined -> skip;
+                        N -> lfu_quick_score:score(N,R)
+                    end
+                end
+            ),
+            L2 = length(lists:filter(
+                fun(I) ->
+                    case whereis(list_to_atom("o" ++ integer_to_list(I))) of
+                        undefined -> false;
+                        _ -> true
+                    end
+                end,
+            lists:seq(if L div ?MAX_LIMIT > 0 -> L div ?MAX_LIMIT; true -> 1 end,U div ?MAX_LIMIT - 1))),
+            L1 + L2
+    end.
+
+resetting(T,Q) ->
+    TL = case ets:info(T) of
+        undefined -> [];
+        _ -> ets:tab2list(T)
+    end,
+    put(reset,0),
+    lists:foreach(
+        fun({_,KL}) ->
+            lists:foreach(
+                fun(K) ->
+                    ets:delete(?ETS_KEYS_TABLE_NAME,K),
+                    C = erase(K),
+                    if
+                        (C-1) div ?MAX_LIMIT == 0 ->
+                            N  = list_to_atom("o0" ++ integer_to_list((C-1) div ?MIN_LIMIT)),
+                            case whereis(N) of
+                                undefined ->
+                                    lfu_exact_score_sup:start([(C-1) div ?MIN_LIMIT,0]),
+                                    lfu_exact_score:reset(N,K);
+                                _ ->
+                                    lfu_exact_score:reset(N,K)
+                            end;
+                        true ->
+                            N = list_to_atom("o" ++ integer_to_list((C-1) div ?MAX_LIMIT)),
+                            case whereis(N) of
+                                undefined ->
+                                    lfu_quick_score_sup:start([(C-1) div ?MAX_LIMIT,0]),
+                                    lfu_quick_score:reset(N,K);
+                                true ->
+                                    lfu_quick_score:reset(N,K)
+                            end
+                    end,
+                    put(reset,get(reset)+1)
+                end,
+            KL)
+        end,
+    TL),
+    Q - erase(reset).
 
 for(N,N,F) -> F(N);
 for(I,N,_) when I > N -> null;
 for(I,N,F) -> F(I),for(I+1,N,F).
-
-grep([H|T],F) -> case F(H) of true -> [H|grep(T,F)]; false -> grep(T,F) end;
-grep([],_) -> [].
