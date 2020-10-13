@@ -17,7 +17,8 @@
 
 
 start_link() ->
-    supervisor:start_link({local,?MODULE},?MODULE,[]).
+    {ok,PID} = supervisor:start_link({local,?MODULE},?MODULE,[]),
+    {ok,PID,[?ETS_KEYS_TABLE_NAME,?ETS_PIDS_TABLE_NAME]}.
 
 
 init(_) ->
@@ -34,7 +35,7 @@ init(_) ->
                permanent,5000,supervisor,[lfu_score_sups_sup]
            }
        ]
-   },[?ETS_KEYS_TABLE_NAME,?ETS_PIDS_TABLE_NAME]}.
+   }}.
 
 
 stop() ->
