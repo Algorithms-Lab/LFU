@@ -1,4 +1,4 @@
--module(lfu_exact_quick_sups_sup).
+-module(lfu_score_sups_sup).
 -author('VSolenkov').
 
 -behavior(supervisor).

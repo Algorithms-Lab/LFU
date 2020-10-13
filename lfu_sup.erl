@@ -30,11 +30,11 @@ init(_) ->
                permanent,5000,worker,[lfu]
            },
            {
-               lfu_score_sups_sup,{lfu_exact_quick_sups_sup,start_link,[]},
-               permanent,5000,supervisor,[lfu_exact_quick_sups_sup]
+               lfu_score_sups_sup,{lfu_score_sups_sup,start_link,[]},
+               permanent,5000,supervisor,[lfu_score_sups_sup]
            }
        ]
-   },{?ETS_KEYS_TABLE_NAME,?ETS_PIDS_TABLE_NAME}}.
+   },[?ETS_KEYS_TABLE_NAME,?ETS_PIDS_TABLE_NAME]}.
 
 
 stop() ->
