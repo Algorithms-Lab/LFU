@@ -28,7 +28,7 @@ start([O,Q]) ->
     gen_server:start_link(
         {local,list_to_atom("o" ++ integer_to_list(O))},
         ?MODULE,[O,Q],
-    [{spawn_opt,?SPAWN_OPT_SIMPLE_SCORE}]).
+    [{spawn_opt,?SPAWN_OPT_QUICK_SCORE}]).
 
 
 init([O,Q]) ->

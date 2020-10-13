@@ -21,16 +21,22 @@
 -define(ETS_PIDS_TABLE_NAME,lfu_pid).
 -define(ETS_KEYS_TABLE_NAME,lfu_key).
 
--define(SPAWN_OPT_SIMPLE_SCORE,[
-%   {max_heap_size,0},			%% Erlang/OTP > 18
-%   {message_queue_data,off_heap},	%% Erlang/OTP > 18
+-define(SPAWN_OPT_LFU,[
+%   {max_heap_size,0},
+%   {message_queue_data,off_heap},
+    {fullsweep_after,65535}
+]).
+
+-define(SPAWN_OPT_EXACT_SCORE,[
+%   {max_heap_size,0},
+%   {message_queue_data,on_heap},
 %   {min_bin_vheap_size,46422},
 %   {min_heap_size,233},
     {fullsweep_after,65535}
 ]).
 -define(SPAWN_OPT_QUICK_SCORE,[
-%   {max_heap_size,0},			%% Erlang/OTP > 18
-%   {message_queue_data,off_heap},	%% Erlang/OTP > 18
+%   {max_heap_size,0},
+%   {message_queue_data,on_heap},
 %   {min_bin_vheap_size,46422},
 %   {min_heap_size,233},
     {fullsweep_after,65535}
@@ -38,8 +44,8 @@
 
 -ifdef(support).
     -define(SUPPORT,true).
-    -define(SECONDARY,kit).
+    -define(AUXILIARY,kit).
 -else.
     -define(SUPPORT,false).
-    -define(SECONDARY,any).
+    -define(AUXILIARY,any).
 -endif.

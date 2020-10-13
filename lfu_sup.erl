@@ -34,7 +34,7 @@ init(_) ->
                permanent,5000,supervisor,[lfu_exact_quick_sups_sup]
            }
        ]
-   }}.
+   },{?ETS_KEYS_TABLE_NAME,?ETS_PIDS_TABLE_NAME}}.
 
 
 stop() ->

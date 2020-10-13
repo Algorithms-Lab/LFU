@@ -38,7 +38,10 @@
 
 
 start_link() ->
-    gen_statem:start_link({local,?MODULE},?MODULE,[?MIN_ORDER,0],[]).
+    gen_statem:start_link(
+        {local,?MODULE},
+        ?MODULE,[?MIN_ORDER,0],
+    [{spawn_opt,?SPAWN_OPT_LFU}]).
 
 
 init(Data) ->
@@ -89,7 +92,7 @@ common(cast,{point,K},[O,Q]) ->
             end,
             put(K,1),
             ets:insert(?ETS_KEYS_TABLE_NAME,{K,1}),
-            ?SUPPORT andalso erlang:apply(?SECONDARY,point,[K]),
+            ?SUPPORT andalso erlang:apply(?AUXILIARY,point,[K]),
             {keep_state,[O,if ?SCORE_OFFSET == 0 -> Q+1; true -> Q end]};
         C when C < ?MAX_ORDER ->
             if
@@ -151,10 +154,10 @@ common(cast,{point,K},[O,Q]) ->
             end,
             put(K,C+1),
             ets:insert(?ETS_KEYS_TABLE_NAME,{K,C+1}),
-            ?SUPPORT andalso erlang:apply(?SECONDARY,point,[K]),
+            ?SUPPORT andalso erlang:apply(?AUXILIARY,point,[K]),
             {keep_state,[O,if (C+1) / (?SCORE_OFFSET+1) == 1 -> Q+1; true -> Q end]};
         _ ->
-            ?SUPPORT andalso erlang:apply(?SECONDARY,point,[K]),
+            ?SUPPORT andalso erlang:apply(?AUXILIARY,point,[K]),
             {keep_state,[O,Q]}
     end;
 common(cast,{cheat,KVL},[O,Q]) ->
@@ -451,7 +454,7 @@ delete(state_timeout,T,[O,Q,#{tid := T, ref := _R}]) ->
     {next_state,common,[O,Q]};
 delete(cast,{{clean,R},T},[O,Q,#{tid := T, ref := R}]) ->
     NQ = resetting(T,Q),
-    ?SUPPORT andalso erlang:apply(?SECONDARY,reset,[T]),
+    ?SUPPORT andalso erlang:apply(?AUXILIARY,reset,[T]),
     {next_state,common,[O,NQ]};
 delete(cast,{{clean,_R},_T},_State) ->
     keep_state_and_data;
