@@ -40,12 +40,13 @@
 start_link() ->
     gen_statem:start_link(
         {local,?MODULE},
-        ?MODULE,[?MIN_ORDER,0],
+        ?MODULE,[?MIN_ORDER,0,?ETS_KEYS_TABLE_NAME],
     [{spawn_opt,?SPAWN_OPT_LFU}]).
 
 
-init(Data) ->
-    {ok,common,Data}.
+init([O,_,T]) ->
+    Q = restorage(T),
+    {ok,common,[O,Q]}.
 
 callback_mode() ->
     state_functions.
@@ -354,9 +355,9 @@ offset(internal,count,[O,Q,#{previous := P, current := C, following := F, from :
                 Order =:= score ->
                     {next_state,common,[O,Q],[{reply,From,ready}]};
                 Order =:= fetch ->
-                    {next_state,select,[O,Q,#{from => From, tid => maps:get(tid,MD), order => fetch}],[{next_event,internal,fetch}]};
+                    {next_state,select,[O,Q,#{from => From, tid => maps:get(tid,MD), order => fetch}],[{next_event,internal,fetch}]};	%% idle iteration but neccesary
                 Order =:= clean ->
-                    {next_state,select,[O,Q,#{from => From, tid => maps:get(tid,MD), order => clean}],[{next_event,internal,fetch}]}
+                    {next_state,select,[O,Q,#{from => From, tid => maps:get(tid,MD), order => clean}],[{next_event,internal,fetch}]}	%% idle iteration but necessary
             end;
         C / Q * 100 < ?MIN_OFFSET andalso O*10 =< ?MAX_ORDER andalso F / Q * 100 =< ?MAX_OFFSET ->
             {keep_state,[O*10,Q,MD#{previous => C, current => F, following => 0}],[{next_event,internal,{score,{following,{O*100,O*1000}}}}]};
@@ -411,12 +412,13 @@ select(state_timeout,T,[O,Q,#{tid := T, from := From, order := Order} = MD]) ->
         Order =:= fetch ->
             {next_state,common,[O,Q],[{reply,From,ready}]};
         Order =:= clean ->
-            {next_state,delete,[O,Q,#{tid => T}],[{reply,From,ready},{state_timeout,?TIMEOUT_STATE_DELETE,T}]}
+            R1 = make_ref(),
+            {next_state,delete,[O,Q,#{tid => T, ref => R1}],[{reply,From,R1},{state_timeout,?TIMEOUT_STATE_DELETE,T}]}
     end;
 select(cast,{{fetch,R},ready},[O,Q,#{number := N, tid := T, from := From, order := Order, ref := R} = MD]) ->
     if
         N > 1 ->
-            {keep_state,[O,Q,MD#{number => N - 1, ref => R}],[{state_timeout,?TIMEOUT_STATE_SELECT,T}]};
+            {keep_state,[O,Q,MD#{number => N - 1}],[{state_timeout,?TIMEOUT_STATE_SELECT,T}]};
         true ->
             if
                 Order =:= fetch ->
@@ -450,7 +452,7 @@ select({call,_From},{clean,_T},_State) ->
     {keep_state_and_data,[postpone]}.
 
 delete(state_timeout,T,[O,Q,#{tid := T, ref := _R}]) ->
-    io:format("TimeoutState:~p~nT:~p~nO:~p~nQ~p~n~n",[select,T,O,Q]),
+    io:format("TimeoutState:~p~nT:~p~nO:~p~nQ~p~n~n",[delete,T,O,Q]),
     {next_state,common,[O,Q]};
 delete(cast,{{clean,R},T},[O,Q,#{tid := T, ref := R}]) ->
     NQ = resetting(T,Q),
@@ -682,6 +684,36 @@ resetting(T,Q) ->
         end,
     TL),
     Q - erase(reset).
+
+restorage(T) ->
+    TL = case ets:info(T) of
+        undefined -> [];
+        _ -> ets:tab2list(T)
+    end,
+    %io:format("+!!!!!TL:~p!!!!!+~n",[TL]),
+
+    put(quantity,0),
+    lists:foreach(
+        fun({K,V}) ->
+            if
+                V < ?MAX_ORDER ->
+                    if
+                        V div ?MAX_LIMIT =< 1 ->
+                            N = list_to_atom("o0" ++ integer_to_list((V -1)div ?MIN_LIMIT)),
+                            whereis(N) =:= undefined andalso lfu_exact_score_sup:start([(V-1) div ?MIN_LIMIT,0]);
+                        true ->
+                            N = list_to_atom("o" ++ integer_to_list((V-1) div ?MAX_LIMIT)),
+                            whereis(N) =:= undefined andalso lfu_quick_score_sup:start([(V-1) div ?MAX_LIMIT,0])
+                    end,
+                    put(K,V),
+                    V > ?SCORE_OFFSET andalso put(quantity,get(quantity)+1),
+                    ?SUPPORT andalso erlang:apply(?AUXILIARY,cheat,[[{K,V}]]);
+                true ->
+                    ?SUPPORT andalso erlang:apply(?AUXILIARY,cheat,[[{K,V}]])
+            end
+        end,
+    TL),
+    erase(quantity).
 
 for(N,N,F) -> F(N);
 for(I,N,_) when I > N -> null;

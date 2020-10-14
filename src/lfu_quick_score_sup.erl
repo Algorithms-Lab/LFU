@@ -22,7 +22,7 @@ start_link() ->
 
 init(_) ->
    {ok,{
-       {simple_one_for_one,10,300},[{
+       {simple_one_for_one,100,300},[{
            quick_score,{lfu_quick_score,start,[]},
            permanent,brutal_kill,worker,[lfu_quick_score]
        }]

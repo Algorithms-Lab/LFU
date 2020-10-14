@@ -21,7 +21,7 @@ start_link() ->
 
 init(_) ->
    {ok,{
-       {one_for_one,1,300},[
+       {one_for_one,1,1},[
            {
                exact_score_sup,{lfu_exact_score_sup,start_link,[]},
                permanent,5000,supervisor,[lfu_exact_score_sup]
