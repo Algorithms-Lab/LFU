@@ -42,14 +42,14 @@ stop() ->
 
 
 init_tables(ETS_TABLES) ->
-    case application:get_env(lfu,ets_recovery,false) of
+    case application:get_env(ets_recovery,false) of
         true ->
             lists:foreach(
                 fun(T) ->
-                    F = element(2,file:get_cwd()) ++ "/" ++ atom_to_list(application:get_env(lfu,ets_dir,priv)) ++ "/" ++ atom_to_list(T),
+                    F = element(2,file:get_cwd()) ++ "/" ++ atom_to_list(application:get_env(ets_dir,priv)) ++ "/" ++ atom_to_list(T),
                     case filelib:is_file(F) of
                         true ->
-                            ets:file2tab(element(2,file:get_cwd()) ++ "/" ++ atom_to_list(application:get_env(lfu,ets_dir,priv)) ++ "/" ++ atom_to_list(T));
+                            ets:file2tab(element(2,file:get_cwd()) ++ "/" ++ atom_to_list(application:get_env(ets_dir,priv)) ++ "/" ++ atom_to_list(T));
                         false ->
                             ets:new(T,[named_table,set,public])
                     end

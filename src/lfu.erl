@@ -306,7 +306,7 @@ common(info,_EventContent,_State) ->
 offset(internal,{score,{Step,{L,U}}},[O,Q,MD]) ->
     R = make_ref(),
     N = scoring(L,U,R),
-    io:format("State:~p~nCommand:~p~nO:~p~nQ:~p~nL:~p~nU:~p~nStep:~p~nN:~p~nMD~p~n~n",[offset,score,O,Q,L,U,Step,N,MD]),
+   % io:format("State:~p~nCommand:~p~nO:~p~nQ:~p~nL:~p~nU:~p~nStep:~p~nN:~p~nMD~p~n~n",[offset,score,O,Q,L,U,Step,N,MD]),
     if
         N > 0 ->
             {keep_state,[O,Q,MD#{number => N, step => Step, ref => R}],[{state_timeout,?TIMEOUT_STATE_OFFSET,Step}]};
@@ -314,7 +314,7 @@ offset(internal,{score,{Step,{L,U}}},[O,Q,MD]) ->
             {keep_state,[O,Q,MD#{number => N, step => Step, ref => R}],[{state_timeout,0,Step}]}
     end;
 offset(state_timeout,Step,[O,Q,#{step := Step} = MD]) ->
-    io:format("TimeoutState:~p~nMD:~p~nO:~p~nQ~p~n~n",[offset,MD,O,Q]),
+   % io:format("TimeoutState:~p~nMD:~p~nO:~p~nQ~p~n~n",[offset,MD,O,Q]),
     if
         Step =:= previous ->
             case maps:is_key(current,MD) of
@@ -348,7 +348,7 @@ offset(cast,{{score,R},S},[O,Q,#{number := N, step := Step, ref := R} = MD]) ->
             end
     end;
 offset(internal,count,[O,Q,#{previous := P, current := C, following := F, from := From, order := Order} = MD]) ->
-    io:format("State:~p~nCommand:~p~nP:~p~nC:~p~nF:~p~nO:~p~nQ~p~n~n",[offset,count,P,C,F,O,Q]),
+   % io:format("State:~p~nCommand:~p~nP:~p~nC:~p~nF:~p~nO:~p~nQ~p~n~n",[offset,count,P,C,F,O,Q]),
     if
         Q < 1 ->
             if
@@ -397,7 +397,7 @@ offset({call,_From},{clean,_T},_State) ->
     {keep_state_and_data,[postpone]}.
 
 select(internal,fetch,[O,Q,#{tid := T} = MD]) ->
-    io:format("State:~p~nCommand:~p~nMD:~p~nO:~p~nQ~p~n~n",[select,fetch,MD,O,Q]),
+   % io:format("State:~p~nCommand:~p~nMD:~p~nO:~p~nQ~p~n~n",[select,fetch,MD,O,Q]),
     R = make_ref(),
     N = fetching(O*10,T,R),
     if
@@ -407,7 +407,7 @@ select(internal,fetch,[O,Q,#{tid := T} = MD]) ->
             {keep_state,[O,Q,MD#{number => N, ref => R}],[{state_timeout,0,T}]}
     end;
 select(state_timeout,T,[O,Q,#{tid := T, from := From, order := Order} = MD]) ->
-    io:format("TimeoutState:~p~nMD:~p~nO:~p~nQ~p~n~n",[select,MD,O,Q]),
+   % io:format("TimeoutState:~p~nMD:~p~nO:~p~nQ~p~n~n",[select,MD,O,Q]),
     if
         Order =:= fetch ->
             {next_state,common,[O,Q],[{reply,From,ready}]};
@@ -452,7 +452,7 @@ select({call,_From},{clean,_T},_State) ->
     {keep_state_and_data,[postpone]}.
 
 delete(state_timeout,T,[O,Q,#{tid := T, ref := _R}]) ->
-    io:format("TimeoutState:~p~nT:~p~nO:~p~nQ~p~n~n",[delete,T,O,Q]),
+   % io:format("TimeoutState:~p~nT:~p~nO:~p~nQ~p~n~n",[delete,T,O,Q]),
     {next_state,common,[O,Q]};
 delete(cast,{{clean,R},T},[O,Q,#{tid := T, ref := R}]) ->
     NQ = resetting(T,Q),

@@ -25,8 +25,8 @@ reset_tables(ETS_TABLES) ->
     [
         ets:tab2file(
             ETS_TABLE,
-            element(2,file:get_cwd()) ++ "/" ++ atom_to_list(application:get_env(lfu,ets_dir,priv)) ++ "/" ++ atom_to_list(ETS_TABLE),
-            [{sync,application:get_env(lfu,ets_sync_reset,true)}]
+            element(2,file:get_cwd()) ++ "/" ++ atom_to_list(application:get_env(ets_dir,priv)) ++ "/" ++ atom_to_list(ETS_TABLE),
+            [{sync,application:get_env(ets_sync_reset,true)}]
         )
         || ETS_TABLE <- ETS_TABLES, ets:info(ETS_TABLE) =/= undefined
     ]. 
