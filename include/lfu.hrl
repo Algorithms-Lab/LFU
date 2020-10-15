@@ -13,20 +13,20 @@
 -define(TIMEOUT_STATE_SELECT,90000).
 -define(TIMEOUT_STATE_DELETE,90000).
 
--define(TIMEOUT_CALL,1000000).
-
 -define(PREFIX_KEY,"lfu___").
 -define(POSTFIX_KEY,"__lfu").
 
 -define(ETS_PIDS_TABLE_NAME,lfu_pid).
 -define(ETS_KEYS_TABLE_NAME,lfu_key).
 
+%%
+%% following settings in progress develop
+%%
 -define(SPAWN_OPT_LFU,[
 %   {max_heap_size,0},
 %   {message_queue_data,off_heap},
     {fullsweep_after,65535}
 ]).
-
 -define(SPAWN_OPT_EXACT_SCORE,[
 %   {max_heap_size,0},
 %   {message_queue_data,on_heap},
