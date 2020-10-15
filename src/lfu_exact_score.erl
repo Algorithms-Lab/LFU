@@ -58,7 +58,7 @@ score(N,R,L,U) ->
 fetch(N,R,T,L,U) ->
     gen_server:cast(N,{fetch,{L,U,T,R}}).
 state(N) ->
-    gen_server:call(N,state,?TIMEOUT_CALL).
+    gen_server:call(N,state,90000).
 
 
 

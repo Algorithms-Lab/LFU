@@ -406,7 +406,7 @@ select(internal,fetch,[O,Q,#{tid := T} = MD]) ->
         true ->
             {keep_state,[O,Q,MD#{number => N, ref => R}],[{state_timeout,0,T}]}
     end;
-select(state_timeout,T,[O,Q,#{tid := T, from := From, order := Order} = MD]) ->
+select(state_timeout,T,[O,Q,#{tid := T, from := From, order := Order} = _MD]) ->
    % io:format("TimeoutState:~p~nMD:~p~nO:~p~nQ~p~n~n",[select,MD,O,Q]),
     if
         Order =:= fetch ->
