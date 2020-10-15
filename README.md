@@ -8,12 +8,12 @@ Reference Guide
 ## description
 This is implementation of LFU algorithm based on processes-counters with support of counter by every keys up to once quadrillion hits.
 
-### Tasks:
+#### tasks:
 
 * Algorithm accumulates any actions by keys in outside system.
 * Algorithm executes fetching keys for follow deletion from outside system.
 
-### More:
+#### more:
 
 * https://en.wikipedia.org/wiki/Cache_replacement_policies#Least-frequently_used_(LFU)
 
