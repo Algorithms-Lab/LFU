@@ -12,7 +12,7 @@
         lfu_exact_score_sup,
         lfu_quick_score_sup
     ]},
-    {applications,[kernel,stdlib,sasl]},
+    {applications,[kernel,stdlib]},
     {included_applications,[]},
     {mod,{lfu_app,[]}},
     {start_phases,[]},
