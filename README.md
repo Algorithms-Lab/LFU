@@ -17,6 +17,36 @@ This is implementation of LFU algorithm based on processes-counters with support
 
 * https://en.wikipedia.org/wiki/Cache_replacement_policies#Least-frequently_used_(LFU)
 
+#### notes:
+Note this implementation lfu algorithm use named processes-counters, that is atoms.
+System quantity atoms is permissible 1048576 by default.
+Maximum possible number named processes dynamic create, counts as follows:
+
+processes of high-order counters
+
+    (MAX_ORDER-1) div MAX_LIMIT
+
+by default configuration:
+
+    (100000000000000-1) div 1000000000
+
+processes of low-order counters
+
+    MAX_LIMIT div MIN_LIMIT
+
+by default configuration:
+
+    1000000000 div 100000
+
+full expression:
+
+    ((100000000000000-1) div 1000000000) + (1000000000 div 100000) = 109 998
+
+But it is value may be more if MAX_ORDER raise to quadrillion:
+
+    ((1000000000000000-1) div 1000000000) + (1000000000 div 100000) = 1 009 998
+
+In this case you necessary is launch the Erlang-node with key '+t'.
 
 ## launch options
 
@@ -104,7 +134,7 @@ Range of values for the processes of low-order counters.
 
 Quantity the processes of low-order counters:
 
-    'MAX_LIMIT' / 'MIN_LIMIT'
+    'MAX_LIMIT' div 'MIN_LIMIT'
 
 #### MAX_LIMIT
 
@@ -112,7 +142,7 @@ Range of values for the processes of high-order counters.
 
 Quantity the processes of high-order counters:
 
-    'MAX_ORDER' / 'MAX_LIMIT'
+    ('MAX_ORDER'-1) div 'MAX_LIMIT'
 
 #### MIN_ORDER
 
@@ -120,7 +150,7 @@ Low (initial) value offset counter.
 
 #### MAX_ORDER
 
-Up (end) value offset counter.
+Up (end) value for key counters and offset counter.
 Keys counters reached this value will be no longer incremented.
 
 Allow values depending on system performance:
@@ -154,7 +184,7 @@ The value of the key counter when a key begins to take into account by the algor
 
 Must be less:
     
-    '?MIN_ORDER'
+    'MIN_ORDER'
 
 example:
 
