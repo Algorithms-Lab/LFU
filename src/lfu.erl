@@ -696,7 +696,7 @@ restorage(T) ->
     lists:foreach(
         fun({K,V}) ->
             if
-                V < ?MAX_ORDER ->
+                V =< ?MAX_ORDER ->
                     if
                         V div ?MAX_LIMIT =< 1 ->
                             N = list_to_atom("o0" ++ integer_to_list((V -1)div ?MIN_LIMIT)),
