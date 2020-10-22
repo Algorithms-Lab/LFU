@@ -30,9 +30,6 @@
     select/3,
     delete/3
 ]).
--export([
-    for/3
-]).
 -include("include/lfu.hrl").
 
 
@@ -51,20 +48,48 @@ init([O,_,T]) ->
 callback_mode() ->
     state_functions.
 
-
 point(K) ->
-    gen_statem:cast(?MODULE,{point,K}).
+    case lfu_utils:key_validation(K) of
+        BK when is_binary(BK) ->
+            gen_statem:cast(?MODULE,{point,BK});
+        -1 ->
+            "type_error";
+        -2 ->
+            "size_key_error"
+    end.
 cheat(KVL) ->
     case is_list(KVL) of
         true ->
-            gen_statem:cast(?MODULE,{cheat,KVL});
+            VKVL = lists:filtermap(
+                fun({K,V}) ->
+                    case lfu_utils:key_validation(K) of
+                        BK when is_binary(BK) ->
+                            {true,{BK,V}};
+                        _ ->
+                            false
+                    end
+                end,
+            KVL),
+            if
+                length(VKVL) > 0 ->
+                    gen_statem:cast(?MODULE,{cheat,VKVL});
+                true ->
+                    "data_error"
+            end;
         false ->
-            throw(must_be_list)
+            "type_error"
+    end.
+count(K) ->
+    case lfu_utils:key_validation(K) of
+        BK when is_binary(BK) ->
+            gen_statem:call(?MODULE,{count,BK});
+        -1 ->
+            "type_error";
+        -2 ->
+            "size_key_error"
     end.
 state() ->
     gen_statem:call(?MODULE,state).
-count(K) ->
-    gen_statem:call(?MODULE,{count,K}).
 score() ->
     gen_statem:call(?MODULE,score).
 fetch(T) ->
@@ -192,7 +217,7 @@ common(cast,{cheat,KVL},[O,Q]) ->
                 V > 0 ->
                     if
                         (V-1) div ?MAX_LIMIT == 0 ->
-                            for(0,(V-1) div ?MIN_LIMIT,
+                            lfu_utils:for(0,(V-1) div ?MIN_LIMIT,
                                 fun(I) ->
                                     N = list_to_atom("o0" ++ integer_to_list(I)),
                                     case whereis(N) of
@@ -208,7 +233,7 @@ common(cast,{cheat,KVL},[O,Q]) ->
                                 end
                             );
                         true ->
-                            for(0,(V-1) div ?MIN_LIMIT,
+                            lfu_utils:for(0,(V-1) div ?MIN_LIMIT,
                                 fun(I) ->
                                     N = list_to_atom("o0" ++ integer_to_list(I)),
                                     case whereis(N) of
@@ -218,7 +243,7 @@ common(cast,{cheat,KVL},[O,Q]) ->
                                     end
                                 end
                             ),
-                            for(1,(V-1) div ?MAX_LIMIT,
+                            lfu_utils:for(1,(V-1) div ?MAX_LIMIT,
                                 fun(I) ->
 	                            N = list_to_atom("o" ++ integer_to_list(I)),
                                     case whereis(N) of
@@ -291,16 +316,19 @@ common(cast,{reset,T},[O,Q]) ->
 common({call,From},{reset,T},[O,Q]) ->
     NQ = resetting(T,Q),
     {keep_state,[O,NQ],[{reply,From,ready}]};
-common(cast,{{score,_R},_S},_State) ->
+common(cast,{{score,_R},_S},_StateData) ->
     keep_state_and_data;
-common(cast,{{fetch,_R},ready},_State) ->
+common(cast,{{fetch,_R},ready},_StateData) ->
     keep_state_and_data;
-common(cast,{{clean,_R},_T},_State) ->
+common(cast,{{clean,_R},_T},_StateData) ->
     keep_state_and_data;
-common(cast,EventContent,_State) ->
+common(cast,EventContent,_StateData) ->
     io:format('State: common~nEventType: cast~nEventContent: ~p~n',[EventContent]),
     keep_state_and_data;
-common(info,_EventContent,_State) ->
+common({call,_From},EventContent,_StateData) ->
+    io:format('State: common~nEventType: cast~nEventContent: ~p~n',[EventContent]),
+    keep_state_and_data;
+common(info,_EventContent,_StateData) ->
     keep_state_and_data.
 
 offset(internal,{score,{Step,{L,U}}},[O,Q,MD]) ->
@@ -373,28 +401,32 @@ offset(internal,count,[O,Q,#{previous := P, current := C, following := F, from :
                     {next_state,select,[O,Q,#{from => From, tid => maps:get(tid,MD), order => clean}],[{next_event,internal,fetch}]}
             end
     end;
-offset(cast,{{score,_},_S},_State) ->
+offset(cast,{{score,_},_S},_StateData) ->
     keep_state_and_data;
-offset(info,_EventContent,_State) ->
+offset(cast,{{fetch,_R},_S},_StateData) ->
     keep_state_and_data;
-offset(cast,{{fetch,_R},_S},_State) ->
+offset(cast,{{clean,_R},_T},_StateData) ->
     keep_state_and_data;
-offset(cast,{{clean,_R},_T},_State) ->
+offset(cast,{point,_K},_StateData) ->
+    {keep_state_and_data,[postpone]};
+offset(cast,{cheat,_KVL},_StateData) ->
+    {keep_state_and_data,[postpone]};
+offset({call,_From},{count,_K},_StateData) ->
+    {keep_state_and_data,[postpone]};
+offset({call,_From},state,_StateData) ->
+    {keep_state_and_data,[postpone]};
+offset({call,_From},score,_StateData) ->
+    {keep_state_and_data,[postpone]};
+offset({call,_From},{fetch,_T},_StateData) ->
+    {keep_state_and_data,[postpone]};
+offset({call,_From},{clean,_T},_StateData) ->
+    {keep_state_and_data,[postpone]};
+offset(cast,_EventContent,_StateData) ->
     keep_state_and_data;
-offset(cast,{point,_K},_State) ->
-    {keep_state_and_data,[postpone]};
-offset(cast,{cheat,_KVL},_State) ->
-    {keep_state_and_data,[postpone]};
-offset({call,_From},{count,_K},_State) ->
-    {keep_state_and_data,[postpone]};
-offset({call,_From},state,_State) ->
-    {keep_state_and_data,[postpone]};
-offset({call,_From},score,_State) ->
-    {keep_state_and_data,[postpone]};
-offset({call,_From},{fetch,_T},_State) ->
-    {keep_state_and_data,[postpone]};
-offset({call,_From},{clean,_T},_State) ->
-    {keep_state_and_data,[postpone]}.
+offset({call,_From},_EventContent,_StateData) ->
+    keep_state_and_data;
+offset(info,_EventContent,_StateData) ->
+    keep_state_and_data.
 
 select(internal,fetch,[O,Q,#{tid := T} = MD]) ->
    % io:format("State:~p~nCommand:~p~nMD:~p~nO:~p~nQ~p~n~n",[select,fetch,MD,O,Q]),
@@ -428,28 +460,32 @@ select(cast,{{fetch,R},ready},[O,Q,#{number := N, tid := T, from := From, order 
                     {next_state,delete,[O,Q,#{tid => T, ref => R1}],[{reply,From,R1},{state_timeout,?TIMEOUT_STATE_DELETE,T}]}
             end
     end;
-select(cast,{{fetch,_R},ready},_State) ->
+select(cast,{{fetch,_R},ready},_StateData) ->
     keep_state_and_data;
-select(cast,{{score,_R},_S},_State) ->
+select(cast,{{score,_R},_S},_StateData) ->
     keep_state_and_data;
-select(info,_EventContent,_State) ->
+select(cast,{{clean,_R},_T},_StateData) ->
     keep_state_and_data;
-select(cast,{{clean,_R},_T},_State) ->
+select(cast,{point,_K},_StateData) ->
+    {keep_state_and_data,[postpone]};
+select(cast,{cheat,_KVL},_StateData) ->
+    {keep_state_and_data,[postpone]};
+select({call,_From},{count,_K},_StateData) ->
+    {keep_state_and_data,[postpone]};
+select({call,_From},state,_StateData) ->
+    {keep_state_and_data,[postpone]};
+select({call,_From},score,_StateData) ->
+    {keep_state_and_data,[postpone]};
+select({call,_From},{fetch,_T},_StateData) ->
+    {keep_state_and_data,[postpone]};
+select({call,_From},{clean,_T},_StateData) ->
+    {keep_state_and_data,[postpone]};
+select(cast,_EventContent,_StateData) ->
     keep_state_and_data;
-select(cast,{point,_K},_State) ->
-    {keep_state_and_data,[postpone]};
-select(cast,{cheat,_KVL},_State) ->
-    {keep_state_and_data,[postpone]};
-select({call,_From},{count,_K},_State) ->
-    {keep_state_and_data,[postpone]};
-select({call,_From},state,_State) ->
-    {keep_state_and_data,[postpone]};
-select({call,_From},score,_State) ->
-    {keep_state_and_data,[postpone]};
-select({call,_From},{fetch,_T},_State) ->
-    {keep_state_and_data,[postpone]};
-select({call,_From},{clean,_T},_State) ->
-    {keep_state_and_data,[postpone]}.
+select({call,_From},_EventContent,_StateData) ->
+    keep_state_and_data;
+select(info,_EventContent,_StateData) ->
+    keep_state_and_data.
 
 delete(state_timeout,T,[O,Q,#{tid := T, ref := _R}]) ->
    % io:format("TimeoutState:~p~nT:~p~nO:~p~nQ~p~n~n",[delete,T,O,Q]),
@@ -458,34 +494,38 @@ delete(cast,{{clean,R},T},[O,Q,#{tid := T, ref := R}]) ->
     NQ = resetting(T,Q),
     ?SUPPORT andalso erlang:apply(?AUXILIARY,reset,[T]),
     {next_state,common,[O,NQ]};
-delete(cast,{{clean,_R},_T},_State) ->
+delete(cast,{{clean,_R},_T},_StateData) ->
     keep_state_and_data;
-delete(cast,{{fetch,_R},ready},_State) ->
+delete(cast,{{fetch,_R},ready},_StateData) ->
     keep_state_and_data;
-delete(cast,{{score,_R},_S},_State) ->
+delete(cast,{{score,_R},_S},_StateData) ->
     keep_state_and_data;
-delete(info,_EventContent,_State) ->
+delete(cast,{point,_K},_StateData) ->
+    {keep_state_and_data,[postpone]};
+delete(cast,{cheat,_KVL},_StateData) ->
+    {keep_state_and_data,[postpone]};
+delete({call,_From},{count,_K},_StateData) ->
+    {keep_state_and_data,[postpone]};
+delete({call,_From},state,_StateData) ->
+    {keep_state_and_data,[postpone]};
+delete({call,_From},score,_StateData) ->
+    {keep_state_and_data,[postpone]};
+delete({call,_From},{fetch,_T},_StateData) ->
+    {keep_state_and_data,[postpone]};
+delete({call,_From},{clean,_T},_StateData) ->
+    {keep_state_and_data,[postpone]};
+delete(cast,_EventContent,_StateData) ->
     keep_state_and_data;
-delete(cast,{point,_K},_State) ->
-    {keep_state_and_data,[postpone]};
-delete(cast,{cheat,_KVL},_State) ->
-    {keep_state_and_data,[postpone]};
-delete({call,_From},{count,_K},_State) ->
-    {keep_state_and_data,[postpone]};
-delete({call,_From},state,_State) ->
-    {keep_state_and_data,[postpone]};
-delete({call,_From},score,_State) ->
-    {keep_state_and_data,[postpone]};
-delete({call,_From},{fetch,_T},_State) ->
-    {keep_state_and_data,[postpone]};
-delete({call,_From},{clean,_T},_State) ->
-    {keep_state_and_data,[postpone]}.
+delete({call,_From},_EventContent,_StateData) ->
+    keep_state_and_data;
+delete(info,_EventContent,_StateData) ->
+    keep_state_and_data.
 
 
 fetching(O,T,R) ->
     if
         (O-1) div ?MAX_LIMIT == 0 ->
-            for(0,(O-1) div ?MIN_LIMIT,
+            lfu_utils:for(0,(O-1) div ?MIN_LIMIT,
                 fun(I) ->
                     N = list_to_atom("o0" ++ integer_to_list(I)),
                     case whereis(N) of
@@ -515,7 +555,7 @@ fetching(O,T,R) ->
                 end,
             lists:seq(0,(O-1) div ?MIN_LIMIT)));
         true ->
-            for(0,(?MAX_LIMIT-1) div ?MIN_LIMIT,
+            lfu_utils:for(0,(?MAX_LIMIT-1) div ?MIN_LIMIT,
                 fun(I) ->
                     N = list_to_atom("o0" ++ integer_to_list(I)),
                     case whereis(N) of
@@ -545,7 +585,7 @@ fetching(O,T,R) ->
                 end,
             lists:seq(0,(?MAX_LIMIT-1) div ?MIN_LIMIT))),
 
-            for(1,(O-1) div ?MAX_LIMIT,
+            lfu_utils:for(1,(O-1) div ?MAX_LIMIT,
                 fun(I) ->
                     N = list_to_atom("o" ++ integer_to_list(I)),
                     case whereis(N) of
@@ -569,7 +609,7 @@ fetching(O,T,R) ->
 scoring(L,U,R) ->
     if
         U =< ?MAX_LIMIT ->
-            for(L div ?MIN_LIMIT,(U-1) div ?MIN_LIMIT,
+            lfu_utils:for(L div ?MIN_LIMIT,(U-1) div ?MIN_LIMIT,
                 fun(I) ->
                     case whereis(list_to_atom("o0" ++ integer_to_list(I))) of
                         undefined ->
@@ -598,7 +638,7 @@ scoring(L,U,R) ->
                 end,
             lists:seq(L div ?MIN_LIMIT,(U-1) div ?MIN_LIMIT)));
         true ->
-            for(L div ?MIN_LIMIT,(?MAX_LIMIT-1) div ?MIN_LIMIT,
+            lfu_utils:for(L div ?MIN_LIMIT,(?MAX_LIMIT-1) div ?MIN_LIMIT,
                 fun(I) ->
                     case whereis(list_to_atom("o0" ++ integer_to_list(I))) of
                         undefined ->
@@ -627,7 +667,7 @@ scoring(L,U,R) ->
                      true -> 0
                  end,
 
-            for(if L div ?MAX_LIMIT > 0 -> L div ?MAX_LIMIT; true -> 1 end,U div ?MAX_LIMIT - 1,
+            lfu_utils:for(if L div ?MAX_LIMIT > 0 -> L div ?MAX_LIMIT; true -> 1 end,U div ?MAX_LIMIT - 1,
                 fun(I) ->
                     case whereis(list_to_atom("o" ++ integer_to_list(I))) of
                         undefined -> skip;
@@ -714,7 +754,3 @@ restorage(T) ->
         end,
     TL),
     erase(quantity).
-
-for(N,N,F) -> F(N);
-for(I,N,_) when I > N -> null;
-for(I,N,F) -> F(I),for(I+1,N,F).

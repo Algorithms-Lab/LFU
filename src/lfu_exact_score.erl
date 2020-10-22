@@ -146,7 +146,7 @@ fetch_handler(L,U,T,R,O,Q) ->
 
 scoring(L,U) ->
     put(counter,0.0),
-    for(L,U,
+    lfu_utils:for(L,U,
         fun(I) ->
             put(counter,get(counter) + length(get_keys(I)))
         end
@@ -154,7 +154,7 @@ scoring(L,U) ->
     get(counter).
 
 insert(L,U,T) ->
-    for(L,U,
+    lfu_utils:for(L,U,
         fun(I) ->
             KL = get_keys(I),
             KL =/= [] andalso ets:insert(T,{I,KL})
@@ -196,7 +196,3 @@ restorage(T,L,U,O) ->
             )
     end,
     erase(quantity).
-
-for(N,N,F) -> F(N);
-for(I,N,_) when I > N -> null;
-for(I,N,F) -> F(I),for(I+1,N,F).
