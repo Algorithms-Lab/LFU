@@ -48,12 +48,27 @@ But it is value may be more if MAX_ORDER raise to quadrillion:
 
 In this case you necessary is launch the Erlang-node with key '+t'.
 
+#### notes:
+Note that the implementation of algorithm an keys store in binary, that is, for set of keys into first example bellow key will stored as in second example:
+
+###### example №1
+
+    <<"moscow">>
+    ["moscow"]
+    "moscow"
+    moscow
+
+###### example №2
+
+    <<"moscow">>
+
 ## launch options
 
     [{lfu,[
-        {ets_dir,priv},		    %% !!! must be atom type !!!!!
-        {ets_sync_reset,true},	%% !!! must be atom type !!!!!
-        {ets_recovery,true}	    %% !!! must be atom type !!!!!
+        {ets_dir,priv},         %% !!! must be atom type !!!!!
+        {ets_sync_reset,true},  %% !!! must be atom type !!!!!
+        {ets_recovery,true},    %% !!! must be atom type !!!!!
+        {max_key_size,72}       %% !!! must be integer type !!!!!
     ]}].
 
 #### ets_dir
@@ -64,6 +79,9 @@ it ensures that the content of the state is written to the disk
 
 #### ets_recovery
 it ensures that lfu launches with prev state
+
+#### max_key_size
+max key size
 
 
 ## client interface
