@@ -687,7 +687,7 @@ scoring(L,U,R) ->
     end.
 
 resetting(T,Q) ->
-    TL = case ets:info(T) of
+    TL = case ets:whereis(T) of
         undefined -> [];
         _ -> ets:tab2list(T)
     end,
@@ -726,7 +726,7 @@ resetting(T,Q) ->
     Q - erase(reset).
 
 restorage(T) ->
-    TL = case ets:info(T) of
+    TL = case ets:whereis(T) of
         undefined -> [];
         _ -> ets:tab2list(T)
     end,

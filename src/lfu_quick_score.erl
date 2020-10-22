@@ -121,7 +121,7 @@ insert(I,T) ->
     KL =/= [] andalso ets:insert(T,{I*?MAX_LIMIT,KL}).
 
 restorage(T,L,U) ->
-    TL = case ets:info(T) of
+    TL = case ets:whereis(T) of
         undefined -> [];
         _ -> ets:tab2list(T)
     end,
