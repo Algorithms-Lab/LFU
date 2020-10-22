@@ -162,7 +162,7 @@ insert(L,U,T) ->
     ).
 
 restorage(T,L,U,O) ->
-    TL = case ets:info(T) of
+    TL = case ets:whereis(T) of
         undefined -> [];
         _ -> ets:tab2list(T)
     end,
