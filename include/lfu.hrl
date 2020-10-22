@@ -19,6 +19,8 @@
 -define(ETS_PIDS_TABLE_NAME,lfu_pid).
 -define(ETS_KEYS_TABLE_NAME,lfu_key).
 
+-define(MAX_SIZE_KEY,fun() -> application:get_env(lfu,max_size_key,72) end).
+
 %%
 %% following settings in progress develop
 %%
