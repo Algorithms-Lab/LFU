@@ -49,7 +49,7 @@ But it is value may be more if MAX_ORDER raise to quadrillion:
 In this case you necessary is launch the Erlang-node with key '+t'.
 
 #### notes:
-Note that the implementation of algorithm an keys store in binary, that is, for set of keys into first example bellow key will stored as in second example:
+Note that the implementation of algorithm stores keys in binary, that is, for set of keys from the first example bellow key will be stored as in second example:
 
 ###### example №1
 
