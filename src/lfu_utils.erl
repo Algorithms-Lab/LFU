@@ -29,7 +29,7 @@ key_validation(K) ->
         -1 ->
             -1;
         BK ->
-            case size(BK) > ?MAX_SIZE_KEY() of
+            case size(BK) > ?MAX_KEY_SIZE() of
                 true ->
                     -2;
                 false ->
