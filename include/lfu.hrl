@@ -18,6 +18,11 @@
 
 -define(ETS_PIDS_TABLE_NAME,lfu_pid).
 -define(ETS_KEYS_TABLE_NAME,lfu_key).
+-define(ETS_KEYS_FETCH_TABLE_NAME,lfu_key_fetch).
+-define(ETS_KEYS_FETCH_TABLE_OPTS,[
+    public,bag,{write_concurrency,true},
+    {decentralized_counters,true}
+]).
 
 -define(MAX_KEY_SIZE,fun() -> application:get_env(lfu,max_key_size,72) end).
 

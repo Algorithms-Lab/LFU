@@ -12,6 +12,8 @@
     state/0,
     count/1,
     score/0,
+    fetch/0,
+    clean/0,
     fetch/1,
     clean/1
 ]).
@@ -92,6 +94,10 @@ state() ->
     gen_statem:call(?MODULE,state).
 score() ->
     gen_statem:call(?MODULE,score).
+fetch() ->
+    gen_statem:call(?MODULE,fetch).
+clean() ->
+    gen_statem:call(?MODULE,clean).
 fetch(T) ->
     gen_statem:call(?MODULE,{fetch,T}).
 clean(T) ->
@@ -306,10 +312,16 @@ common({call,From},state,[O,Q]) ->
     {keep_state,[O,Q],[{reply,From,[O,Q]}]};
 common({call,From},score,[O,Q]) ->
     {next_state,offset,[O,Q,#{from => From, order => score}],[{next_event,internal,{score,{previous,{?SCORE_OFFSET,O}}}}]};
+common({call,From},fetch,[O,Q]) ->
+    T = lfu_utils:ets_re_create(),
+    {next_state,offset,[O,Q,#{from => From, tid => T, ets => internal, order => fetch}],[{next_event,internal,{score,{previous,{?SCORE_OFFSET,O}}}}]};
+common({call,From},clean,[O,Q]) ->
+    T = lfu_utils:ets_re_create(),
+    {next_state,offset,[O,Q,#{from => From, tid => T, ets => internal, order => clean}],[{next_event,internal,{score,{previous,{?SCORE_OFFSET,O}}}}]};
 common({call,From},{fetch,T},[O,Q]) ->
-    {next_state,offset,[O,Q,#{from => From, tid => T, order => fetch}],[{next_event,internal,{score,{previous,{?SCORE_OFFSET,O}}}}]};
+    {next_state,offset,[O,Q,#{from => From, tid => T, ets => external, order => fetch}],[{next_event,internal,{score,{previous,{?SCORE_OFFSET,O}}}}]};
 common({call,From},{clean,T},[O,Q]) ->
-    {next_state,offset,[O,Q,#{from => From, tid => T, order => clean}],[{next_event,internal,{score,{previous,{?SCORE_OFFSET,O}}}}]};
+    {next_state,offset,[O,Q,#{from => From, tid => T, ets => external, order => clean}],[{next_event,internal,{score,{previous,{?SCORE_OFFSET,O}}}}]};
 common(cast,{reset,T},[O,Q]) ->
     NQ = resetting(T,Q),
     {keep_state,[O,NQ]};
@@ -383,9 +395,11 @@ offset(internal,count,[O,Q,#{previous := P, current := C, following := F, from :
                 Order =:= score ->
                     {next_state,common,[O,Q],[{reply,From,ready}]};
                 Order =:= fetch ->
-                    {next_state,select,[O,Q,#{from => From, tid => maps:get(tid,MD), order => fetch}],[{next_event,internal,fetch}]};	%% idle iteration but neccesary
+                    %% idle iteration but neccesary
+                    {next_state,select,[O,Q,#{from => From, tid => maps:get(tid,MD), ets => maps:get(ets,MD), order => fetch}],[{next_event,internal,fetch}]};
                 Order =:= clean ->
-                    {next_state,select,[O,Q,#{from => From, tid => maps:get(tid,MD), order => clean}],[{next_event,internal,fetch}]}	%% idle iteration but necessary
+                    %% idle iteration but necessary
+                    {next_state,select,[O,Q,#{from => From, tid => maps:get(tid,MD), ets => maps:get(ets,MD), order => clean}],[{next_event,internal,fetch}]}
             end;
         C / Q * 100 < ?MIN_OFFSET andalso O*10 =< ?MAX_ORDER andalso F / Q * 100 =< ?MAX_OFFSET ->
             {keep_state,[O*10,Q,MD#{previous => C, current => F, following => 0}],[{next_event,internal,{score,{following,{O*100,O*1000}}}}]};
@@ -396,9 +410,9 @@ offset(internal,count,[O,Q,#{previous := P, current := C, following := F, from :
                 Order =:= score ->
                     {next_state,common,[O,Q],[{reply,From,ready}]};
                 Order =:= fetch ->
-                    {next_state,select,[O,Q,#{from => From, tid => maps:get(tid,MD), order => fetch}],[{next_event,internal,fetch}]};
+                    {next_state,select,[O,Q,#{from => From, tid => maps:get(tid,MD), ets => maps:get(ets,MD), order => fetch}],[{next_event,internal,fetch}]};
                 Order =:= clean ->
-                    {next_state,select,[O,Q,#{from => From, tid => maps:get(tid,MD), order => clean}],[{next_event,internal,fetch}]}
+                    {next_state,select,[O,Q,#{from => From, tid => maps:get(tid,MD), ets => maps:get(ets,MD), order => clean}],[{next_event,internal,fetch}]}
             end
     end;
 offset(cast,{{score,_},_S},_StateData) ->
@@ -416,6 +430,10 @@ offset({call,_From},{count,_K},_StateData) ->
 offset({call,_From},state,_StateData) ->
     {keep_state_and_data,[postpone]};
 offset({call,_From},score,_StateData) ->
+    {keep_state_and_data,[postpone]};
+offset({call,_From},fetch,_StateData) ->
+    {keep_state_and_data,[postpone]};
+offset({call,_From},clean,_StateData) ->
     {keep_state_and_data,[postpone]};
 offset({call,_From},{fetch,_T},_StateData) ->
     {keep_state_and_data,[postpone]};
@@ -438,14 +456,24 @@ select(internal,fetch,[O,Q,#{tid := T} = MD]) ->
         true ->
             {keep_state,[O,Q,MD#{number => N, ref => R}],[{state_timeout,0,T}]}
     end;
-select(state_timeout,T,[O,Q,#{tid := T, from := From, order := Order} = _MD]) ->
+select(state_timeout,T,[O,Q,#{tid := T, from := From, order := Order, ets := internal} = _MD]) ->
+   % io:format("TimeoutState:~p~nMD:~p~nO:~p~nQ~p~n~n",[select,MD,O,Q]),
+    NT = lfu_utils:ets_re_create(ets:tab2list(T)),
+    if
+        Order =:= fetch ->
+            {next_state,common,[O,Q],[{reply,From,NT}]};
+        Order =:= clean ->
+            R1 = make_ref(),
+            {next_state,delete,[O,Q,#{tid => NT, ref => R1}],[{reply,From,{NT,R1}},{state_timeout,?TIMEOUT_STATE_DELETE,NT}]}
+    end;
+select(state_timeout,T,[O,Q,#{tid := T, from := From, order := Order, ets := external} = _MD]) ->
    % io:format("TimeoutState:~p~nMD:~p~nO:~p~nQ~p~n~n",[select,MD,O,Q]),
     if
         Order =:= fetch ->
-            {next_state,common,[O,Q],[{reply,From,ready}]};
+            {next_state,common,[O,Q],[{reply,From,T}]};
         Order =:= clean ->
             R1 = make_ref(),
-            {next_state,delete,[O,Q,#{tid => T, ref => R1}],[{reply,From,R1},{state_timeout,?TIMEOUT_STATE_DELETE,T}]}
+            {next_state,delete,[O,Q,#{tid => T, ref => R1}],[{reply,From,{T,R1}},{state_timeout,?TIMEOUT_STATE_DELETE,T}]}
     end;
 select(cast,{{fetch,R},ready},[O,Q,#{number := N, tid := T, from := From, order := Order, ref := R} = MD]) ->
     if
@@ -454,10 +482,10 @@ select(cast,{{fetch,R},ready},[O,Q,#{number := N, tid := T, from := From, order 
         true ->
             if
                 Order =:= fetch ->
-                    {next_state,common,[O,Q],[{reply,From,ready}]};
+                    {next_state,common,[O,Q],[{reply,From,T}]};
                 Order =:= clean ->
                     R1 = make_ref(),
-                    {next_state,delete,[O,Q,#{tid => T, ref => R1}],[{reply,From,R1},{state_timeout,?TIMEOUT_STATE_DELETE,T}]}
+                    {next_state,delete,[O,Q,#{tid => T, ref => R1}],[{reply,From,{T,R1}},{state_timeout,?TIMEOUT_STATE_DELETE,T}]}
             end
     end;
 select(cast,{{fetch,_R},ready},_StateData) ->
@@ -475,6 +503,10 @@ select({call,_From},{count,_K},_StateData) ->
 select({call,_From},state,_StateData) ->
     {keep_state_and_data,[postpone]};
 select({call,_From},score,_StateData) ->
+    {keep_state_and_data,[postpone]};
+select({call,_From},fetch,_StateData) ->
+    {keep_state_and_data,[postpone]};
+select({call,_From},clean,_StateData) ->
     {keep_state_and_data,[postpone]};
 select({call,_From},{fetch,_T},_StateData) ->
     {keep_state_and_data,[postpone]};
@@ -509,6 +541,10 @@ delete({call,_From},{count,_K},_StateData) ->
 delete({call,_From},state,_StateData) ->
     {keep_state_and_data,[postpone]};
 delete({call,_From},score,_StateData) ->
+    {keep_state_and_data,[postpone]};
+delete({call,_From},fetch,_StateData) ->
+    {keep_state_and_data,[postpone]};
+delete({call,_From},clean,_StateData) ->
     {keep_state_and_data,[postpone]};
 delete({call,_From},{fetch,_T},_StateData) ->
     {keep_state_and_data,[postpone]};
@@ -687,7 +723,7 @@ scoring(L,U,R) ->
     end.
 
 resetting(T,Q) ->
-    TL = case ets:whereis(T) of
+    TL = case ets:info(T) of
         undefined -> [];
         _ -> ets:tab2list(T)
     end,
