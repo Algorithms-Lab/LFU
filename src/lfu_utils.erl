@@ -3,11 +3,29 @@
 
 -export([
     for/3,
-    key_validation/1
+    key_validation/1,
+    ets_re_create/0,
+    ets_re_create/1
 ]).
 -include("include/lfu.hrl").
 
 
+
+ets_re_create() ->
+    ets_re_create([]).
+ets_re_create(D) when is_list(D) ->
+    case get(?ETS_KEYS_FETCH_TABLE_NAME) of
+        undefined -> skip;
+        T ->
+            case ets:info(T) of
+                undefined -> skip;
+                _ -> catch ets:delete(T)
+            end
+    end,
+    NT = ets:new(?ETS_KEYS_FETCH_TABLE_NAME,?ETS_KEYS_FETCH_TABLE_OPTS),
+    ets:insert(NT,D),
+    put(?ETS_KEYS_FETCH_TABLE_NAME,NT),
+    NT.
 
 key_validation(K) ->
     BK =

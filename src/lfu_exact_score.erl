@@ -137,7 +137,7 @@ score_handler(L,U,R,O,Q) ->
 fetch_handler(L,U,T,R,O,Q) ->
     if
         Q > 0 ->
-            insert(L,U,T);
+            catch insert(L,U,T);
         true -> skip
     end,
     lfu:fetch(R,ready),

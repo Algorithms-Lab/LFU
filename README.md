@@ -18,6 +18,20 @@ This is implementation of LFU algorithm based on processes-counters with support
 * https://en.wikipedia.org/wiki/Cache_replacement_policies#Least-frequently_used_(LFU)
 
 #### notes:
+Note that the implementation of algorithm stores keys in binary, that is, for set of keys from the first example bellow key will be stored as in second example:
+
+###### example №1
+
+    <<"moscow">>
+    ["moscow"]
+    "moscow"
+    moscow
+
+###### example №2
+
+    <<"moscow">>
+
+#### notice:
 Note this implementation lfu algorithm use named processes-counters, that is atoms.
 System quantity atoms is permissible 1048576 by default.
 Maximum possible number named processes dynamic create, counts as follows:
@@ -48,19 +62,6 @@ But it is value may be more if MAX_ORDER raise to quadrillion:
 
 In this case you necessary is launch the Erlang-node with key '+t'.
 
-#### notes:
-Note that the implementation of algorithm an keys store in binary, that is, for set of keys into first example bellow key will stored as in second example:
-
-###### example №1
-
-    <<"moscow">>
-    ["moscow"]
-    "moscow"
-    moscow
-
-###### example №2
-
-    <<"moscow">>
 
 ## launch options
 
@@ -106,16 +107,36 @@ max key size
 
     lfu:score().
 
-#### execute scoring of offset counter and get keys by it
+#### execute scoring of offset counter and get keys by it into internal table
+###### Please pay attantion, that exist of internal table expires after following request to fetching 'fetch/0' or to clean 'clean/0'!
 
-    T = ets:new(t,[named_table,bag,public]).
-    lfu:fetch(T).
+    T = lfu:fetch().    %% tid()
     ets:tab2list(T).
 
-#### execute scoring of offset counter and get keys by it for follow delete
+#### execute scoring of offset counter and get keys by it into external table
+###### Please pay attantion, that it`s preferably using interface with internal table 'fetch/0', because it ensures a data consistency with your system!
 
-    T = ets:new(t,[named_table,bag,public]).
-    R = lfu:clean(T).  %% R = ref()
+    T = ets:new(stub,[      %% tid()
+        bag,public,{write_concurrency,true},
+        {decentralized_counters,true}
+    ]).
+    lfu:fetch(T).
+    ets:tab2list(T).
+    
+#### execute scoring of offset counter and get keys by it into internal table for follow delete
+###### Please pay attantion, that exist of internal table expires after following request to fetching 'fetch/0' or to clean 'clean/0'!
+
+    {T,R} = lfu:clean().    %% {tid(),ref()}
+    lfu:clean(R,T).
+    
+#### execute scoring of offset counter and get keys by it into external table for follow delete
+######  Please pay attantion, that it`s preferably using interface with internal table 'clean/0', because it ensures a data consistency with your system!
+
+    T = ets:new(stub,[      %% tid()
+        bag,public,{write_concurrency,true},
+        {decentralized_counters,true}
+    ]).
+    R = lfu:clean(T).       %% ref()
     lfu:clean(R,T).
 
 #### put list keys with conters, for debugging
@@ -145,6 +166,11 @@ max key size
 
     -define(ETS_PIDS_TABLE_NAME,lfu_pid).
     -define(ETS_KEYS_TABLE_NAME,lfu_key).
+    
+    -define(ETS_KEYS_FETCH_TABLE_NAME,lfu_key_fetch).
+    -define(ETS_KEYS_FETCH_TABLE_OPTS,[
+        public,bag,{write_concurrency,true},
+    {decentralized_counters,true}]).
 
 #### MIN_LIMIT
 
@@ -241,3 +267,11 @@ The ets for to store process counter pids.
 #### ETS_KEYS_TABLE_NAME
 
 The ets for to store counters by keys.
+
+#### ETS_KEYS_FETCH_TABLE_NAME
+
+The ets for fetching keys into internal table by commands: 'fetch/0', 'clean/0'.
+
+#### ETS_KEYS_FETCH_TABLE_OPTS
+
+The list of options for creating 'ETS_KEYS_FETCH_TABLE_OPTS' ets.
