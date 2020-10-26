@@ -66,10 +66,17 @@ In this case you necessary is launch the Erlang-node with key '+t'.
 ## launch options
 
     [{lfu,[
-        {ets_dir,priv},         %% !!! must be atom type !!!!!
-        {ets_sync_reset,true},  %% !!! must be atom type !!!!!
-        {ets_recovery,true},    %% !!! must be atom type !!!!!
-        {max_key_size,72}       %% !!! must be integer type !!!!!
+        {ets_dir,priv},                 %% !!! must be atom type !!!!!
+        {ets_sync_reset,true},          %% !!! must be atom type !!!!!
+        {ets_recovery,true},            %% !!! must be atom type !!!!!
+        {tcp,on},                       %% !!! must be atom type !!!!!
+        {mode,inet},                    %% !!! must be atom type !!!!!
+        {port,7777},                    %% !!! must be atom type !!!!!
+        {ip,{127,0,0,1}},               %% !!! must be tuple type !!!!!
+        {unix,"/var/run/lfu/unix"},     %% !!! must by string type !!!!!
+        {num_acceptors,100},            %% !!! must by integer type !!!!!
+        {max_connections,1024},         %% !!! must by integer type !!!!!
+        {max_key_size,72}               %% !!! must be integer type !!!!!
     ]}].
 
 #### ets_dir
@@ -81,40 +88,106 @@ it ensures that the content of the state is written to the disk
 #### ets_recovery
 it ensures that lfu launches with prev state
 
+#### tcp
+on or off support of ranch interaction, by default is off
+
+#### mode
+mode work: inet|unix
+by default is inet
+
+#### port
+port, by default 7777
+
+#### ip
+ip, by default 127.0.0.1
+
+#### unix
+unix_socket, by default '/var/run/lfu/unix'
+
+#### num_acceptors
+excerpt from 'ranch' documentation:
+
+    By default Ranch will use 10 acceptor processes. Their role is to accept connections and spawn a connection process for every new connection.
+    This number can be tweaked to improve performance. A good number is typically between 10 or 100 acceptors. You must measure to find the best value for your application.
+
+#### max_connections
+excerpt from 'ranch' documentation:
+
+    The max_connections transport option allows you to limit the number of concurrent connections per connection supervisor (see below).
+    It defaults to 1024. Its purpose is to prevent your system from being overloaded and ensuring all the connections are handled optimally.
+
+    You can disable this limit by setting its value to the atom infinity.
+
+    The maximum number of connections is a soft limit. In practice, it can reach max_connections + the number of acceptors.
+
+    When the maximum number of connections is reached, Ranch will stop accepting connections.
+    This will not result in further connections being rejected, as the kernel option allows queueing incoming connections.
+    The size of this queue is determined by the backlog option and defaults to 1024. Ranch does not know about the number of connections that are in the backlog.
+
 #### max_key_size
 max key size
 
 
 ## client interface
+###### This section describes two types interfaces:
+
+    internal - erlang interface for inner interaction
+    external - outside interface for interaction from the world outside
 
 #### launch
 
     application:start(lfu).
 
 #### put key
+###### internal:
 
     lfu:point(K).
 
+###### external:
+
+    POINT:key
+
 #### get counter on key
+###### internal:
 
     lfu:count(K).
 
+###### external:
+
+    COUNT:key
+
 #### get offset counter and counter all keys
+###### internal:
 
     lfu:state().
 
-#### execute scoring of bias counter
+###### external:
+
+    STATE
+
+#### execute scoring of offset counter
+###### internal:
 
     lfu:score().
 
+###### external:
+
+    SCORE
+
 #### execute scoring of offset counter and get keys by it into internal table
 ###### Please pay attantion, that exist of internal table expires after following request to fetching 'fetch/0' or to clean 'clean/0'!
+###### internal:
 
     T = lfu:fetch().    %% tid()
     ets:tab2list(T).
 
+###### external:
+
+    FETCH
+
 #### execute scoring of offset counter and get keys by it into external table
 ###### Please pay attantion, that it`s preferably using interface with internal table 'fetch/0', because it ensures a data consistency with your system!
+###### internal:
 
     T = ets:new(stub,[      %% tid()
         bag,public,{write_concurrency,true},
@@ -125,12 +198,17 @@ max key size
     
 #### execute scoring of offset counter and get keys by it into internal table for follow delete
 ###### Please pay attantion, that exist of internal table expires after following request to fetching 'fetch/0' or to clean 'clean/0'!
-
+###### internal:
     {T,R} = lfu:clean().    %% {tid(),ref()}
     lfu:clean(R,T).
     
+###### external:
+
+    CLEAN
+
 #### execute scoring of offset counter and get keys by it into external table for follow delete
 ######  Please pay attantion, that it`s preferably using interface with internal table 'clean/0', because it ensures a data consistency with your system!
+###### internal:
 
     T = ets:new(stub,[      %% tid()
         bag,public,{write_concurrency,true},
@@ -139,9 +217,15 @@ max key size
     R = lfu:clean(T).       %% ref()
     lfu:clean(R,T).
 
-#### put list keys with conters, for debugging
+#### put list keys with conters
+###### initialization of state, for example, transfer of state from other implementation 'lfu'
+###### internal:
 
     lfu:cheat([{K1,C1},{K2,C2},{K3,C3}]).
+
+###### external:
+
+    CHEAT:key1,counter1;key2,counter2;key3,counter3
 
 
 ## configuration
