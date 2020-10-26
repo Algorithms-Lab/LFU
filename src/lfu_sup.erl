@@ -88,6 +88,6 @@ init_unix() ->
 init_port() ->
     [{ip,application:get_env(lfu,ip,{127,0,0,1})},{port,application:get_env(lfu,port,7777)}].
 init_acceptors() ->
-    application:get_env(lfu,acceptors,100).
+    application:get_env(lfu,num_acceptors,100).
 init_connections() ->
-    application:get_env(lfu,connections,1024).
+    application:get_env(lfu,max_connections,1024).
