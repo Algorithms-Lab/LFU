@@ -11,6 +11,7 @@
 
 
 start(_StartType,_StartArgs) ->
+    application:get_env(lfu,tcp,off) == on andalso application:ensure_all_started(ranch),
     lfu_sup:start_link().
 
 stop(_ETS_TABLES) ->
@@ -18,6 +19,7 @@ stop(_ETS_TABLES) ->
 
 prep_stop(ETS_TABLES) ->
     reset_tables(ETS_TABLES),
+%   application:get_env(lfu,tcp,off) == on andalso application:stop(ranch),
     ok.
 
 
