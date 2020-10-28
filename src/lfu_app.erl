@@ -29,7 +29,7 @@ reset_tables(ETS_TABLES) ->
             ets:whereis(ETS_TABLE) =/= undefined andalso
             ets:tab2file(
                 ETS_TABLE,
-                element(2,file:get_cwd()) ++ "/" ++ atom_to_list(application:get_env(lfu,ets_dir,priv)) ++ "/" ++ atom_to_list(ETS_TABLE),
+                element(2,file:get_cwd()) ++ "/" ++ application:get_env(lfu,ets_dir,"priv") ++ "/" ++ atom_to_list(ETS_TABLE),
             [{sync,application:get_env(lfu,ets_sync_reset,true)}])
         end,
     ETS_TABLES).
