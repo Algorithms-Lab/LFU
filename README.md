@@ -18,6 +18,21 @@ This is implementation of LFU algorithm based on processes-counters with support
 * https://en.wikipedia.org/wiki/Cache_replacement_policies#Least-frequently_used_(LFU)
 
 #### notes:
+##### note №1:
+Note that the implementation of algorithm support two interaction modes:
+
+###### internal
+
+    like OTP application into your Erlang node
+
+###### external
+
+    like daemon into your Unix-like OS
+
+But actually nothing forbidens to interact in both modes at same time.
+
+
+##### note №2:
 Note that the implementation of algorithm stores keys in binary, that is, for set of keys from the first example bellow key will be stored as in second example:
 
 ###### example №1
@@ -36,23 +51,23 @@ Note this implementation lfu algorithm use named processes-counters, that is ato
 System quantity atoms is permissible 1048576 by default.
 Maximum possible number named processes dynamic create, counts as follows:
 
-processes of high-order counters
+###### processes of high-order counters
 
     (MAX_ORDER-1) div MAX_LIMIT
 
-by default configuration:
+###### by default configuration:
 
     (100000000000000-1) div 1000000000
 
-processes of low-order counters
+###### processes of low-order counters
 
     MAX_LIMIT div MIN_LIMIT
 
-by default configuration:
+###### by default configuration:
 
     1000000000 div 100000
 
-full expression:
+###### full expression:
 
     ((100000000000000-1) div 1000000000) + (1000000000 div 100000) = 109 998
 
@@ -66,7 +81,7 @@ In this case you necessary is launch the Erlang-node with key '+t'.
 ## launch options
 
     [{lfu,[
-        {ets_dir,priv},                 %% !!! must be atom type !!!!!
+        {ets_dir,"priv"},               %% !!! must be string type !!!!!
         {ets_sync_reset,true},          %% !!! must be atom type !!!!!
         {ets_recovery,true},            %% !!! must be atom type !!!!!
         {tcp,on},                       %% !!! must be atom type !!!!!
@@ -80,7 +95,7 @@ In this case you necessary is launch the Erlang-node with key '+t'.
     ]}].
 
 #### ets_dir
-directory storage ets-tables
+path to directory storage ets-tables, relative to the root directory of application
 
 #### ets_sync_reset
 it ensures that the content of the state is written to the disk
@@ -131,12 +146,17 @@ max key size
 ## client interface
 ###### This section describes two types interfaces:
 
-    internal - erlang interface for inner interaction
+    internal - erlang interface for inner interaction in Erlang node
     external - outside interface for interaction from the world outside
 
 #### launch
+###### internal:
 
     application:start(lfu).
+
+###### external:
+
+    bin/start
 
 #### put key
 ###### internal:
@@ -145,7 +165,7 @@ max key size
 
 ###### external:
 
-    POINT:key
+    POINT:key               %% "OK"
 
 #### get counter on key
 ###### internal:
@@ -154,7 +174,7 @@ max key size
 
 ###### external:
 
-    COUNT:key
+    COUNT:key               %% "NUMBER"
 
 #### get offset counter and counter all keys
 ###### internal:
@@ -163,7 +183,7 @@ max key size
 
 ###### external:
 
-    STATE
+    STATE                   %% JSON: "{O:NUMBER,Q:NUMBER}"
 
 #### execute scoring of offset counter
 ###### internal:
@@ -172,18 +192,18 @@ max key size
 
 ###### external:
 
-    SCORE
+    SCORE                   %% "READY"
 
 #### execute scoring of offset counter and get keys by it into internal table
-###### Please pay attantion, that exist of internal table expires after following request to fetching 'fetch/0' or to clean 'clean/0'!
 ###### internal:
+###### Please pay attantion, that exist of internal table expires after following request to fetching 'fetch/0' or to clean 'clean/0'!
 
-    T = lfu:fetch().    %% tid()
+    T = lfu:fetch().        %% tid()
     ets:tab2list(T).
 
 ###### external:
 
-    FETCH
+    FETCH                   %% JSON: "[{number1:[key1,key2,key3]},{number2:[key1,key2,key3]},{number3:[key1,key2,key3]},...]"
 
 #### execute scoring of offset counter and get keys by it into external table
 ###### Please pay attantion, that it`s preferably using interface with internal table 'fetch/0', because it ensures a data consistency with your system!
@@ -197,14 +217,16 @@ max key size
     ets:tab2list(T).
     
 #### execute scoring of offset counter and get keys by it into internal table for follow delete
-###### Please pay attantion, that exist of internal table expires after following request to fetching 'fetch/0' or to clean 'clean/0'!
 ###### internal:
+###### Please pay attantion, that exist of internal table expires after following request to fetching 'fetch/0' or to clean 'clean/0'!
+
     {T,R} = lfu:clean().    %% {tid(),ref()}
     lfu:clean(R,T).
     
 ###### external:
 
-    CLEAN
+    CLEAN                   %% JSON: "{[{number1:[key1,key2,key3]},{number2:[key1,key2,key3]},{number3:[key1,key2,key3]},...]:UNIQ_REF}"
+    CLEAN:UNIQ_REF          %% OK
 
 #### execute scoring of offset counter and get keys by it into external table for follow delete
 ######  Please pay attantion, that it`s preferably using interface with internal table 'clean/0', because it ensures a data consistency with your system!
@@ -225,7 +247,7 @@ max key size
 
 ###### external:
 
-    CHEAT:key1,counter1;key2,counter2;key3,counter3
+    CHEAT:key1,counter1;key2,counter2;key3,counter3 %% OK
 
 
 ## configuration
@@ -260,7 +282,7 @@ max key size
 
 Range of values for the processes of low-order counters.
 
-Quantity the processes of low-order counters:
+###### Quantity the processes of low-order counters:
 
     'MAX_LIMIT' div 'MIN_LIMIT'
 
@@ -268,7 +290,7 @@ Quantity the processes of low-order counters:
 
 Range of values for the processes of high-order counters.
 
-Quantity the processes of high-order counters:
+###### Quantity the processes of high-order counters:
 
     ('MAX_ORDER'-1) div 'MAX_LIMIT'
 
@@ -281,7 +303,7 @@ Low (initial) value offset counter.
 Up (end) value for key counters and offset counter.
 Keys counters reached this value will be no longer incremented.
 
-Allow values depending on system performance:
+###### Allow values depending on system performance:
 
     1000000000
     10000000000
@@ -310,11 +332,11 @@ The larger it is, the more keys will be available for follow deletion.
 
 The value of the key counter when a key begins to take into account by the algorithm.
 
-Must be less:
+###### Must be less:
     
     'MIN_ORDER'
 
-example:
+###### example:
 
     if it`s necessary begin score from 100 then need set to 99
 
