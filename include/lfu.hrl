@@ -10,7 +10,7 @@
 -define(SCORE_OFFSET,0).		%% must be less than ?MIN_ORDER && for example if it`s necessary begin score from 100 then need setting to 99
 
 -define(TIMEOUT_STATE_OFFSET,90000).
--define(TIMEOUT_STATE_SELECT,1).
+-define(TIMEOUT_STATE_SELECT,90000).
 -define(TIMEOUT_STATE_DELETE,90000).
 
 -define(PREFIX_KEY,"lfu___").
