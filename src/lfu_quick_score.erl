@@ -121,22 +121,17 @@ insert(I,T) ->
     KL =/= [] andalso ets:insert(T,{I*?MAX_LIMIT,KL}).
 
 restorage(T,L,U) ->
-    TL = case ets:whereis(T) of
-        undefined -> [];
-        _ -> ets:tab2list(T)
-    end,
-    %io:format("+!!!!!TL:~p!!!!!+~n",[TL]),
-
     put(quantity,0),
-    lists:foreach(
-        fun({K,_}) ->
-            put(K,1),
-            put(quantity,get(quantity)+1)
+    ets:foldl(
+        fun({K,V},[]) ->
+            if
+                V >= L andalso V =< U ->
+                    put(K,1),
+                    put(quantity,get(quantity)+1),
+                    [];
+                true ->
+                    []
+            end
         end,
-        lists:filter(
-            fun({_,V}) ->
-                V >= L andalso V =< U
-            end,
-        TL)
-    ),
+    [],T),
     erase(quantity).

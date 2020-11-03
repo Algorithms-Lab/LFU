@@ -110,7 +110,19 @@ common(info,{tcp,S,<<"FETCH",_/binary>>},[S,T]) ->
     T:setopts(S,[{active,once}]),
     case catch ets:info(lfu:fetch()) of
         I when is_list(I) -> 
-            T:send(S,pack_ets_to_binary(ets:tab2list(proplists:get_value(id,I)),<<>>));
+            BD = ets:foldl(
+                fun({K,V},BA) ->
+                    BK = integer_to_binary(K),
+                    BV = pack_list_to_binary(V,<<>>),
+                    case BA of
+                        <<>> ->
+                            <<"{",BK/binary,":",BV/binary,"}">>;
+                        BA ->
+                            <<BA/binary,",","{",BK/binary,":",BV/binary,"}">>
+                    end
+                end,
+            <<>>,proplists:get_value(id,I)),
+            T:send(S,<<"[",BD/binary,"]">>);
         _ ->
             T:send(S,<<"{","ERROR",":","UNKNOW_ERROR","}">>)
     end,
@@ -119,9 +131,20 @@ common(info,{tcp,S,<<"CLEAN",_/binary>>},[S,T]) ->
     T:setopts(S,[{active,once}]),
     case lfu:clean() of
         {TID,R} when is_reference(TID) andalso is_reference(R) ->
-            BD = pack_ets_to_binary(ets:tab2list(TID),<<>>),
+            BD = ets:foldl(
+                fun({K,V},BA) ->
+                    BK = integer_to_binary(K),
+                    BV = pack_list_to_binary(V,<<>>),
+                    case BA of
+                        <<>> ->
+                            <<"{",BK/binary,":",BV/binary,"}">>;
+                        BA ->
+                            <<BA/binary,",","{",BK/binary,":",BV/binary,"}">>
+                    end
+                end,
+            <<>>,TID),
             BR = list_to_binary(ref_to_list(R)),
-            T:send(S,<<"{",BD/binary,":",BR/binary,"}">>),
+            T:send(S,<<"{","[",BD/binary,"]",":",BR/binary,"}">>),
             {next_state,delete,[S,T,#{ref => BR, tid => TID}],[{state_timeout,?TIMEOUT_STATE_DELETE,BR}]};
         _ ->
             T:send(S,<<"{","ERROR",":","UNKNOW_ERROR","}">>),
