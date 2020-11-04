@@ -9,13 +9,17 @@
 -export([
     point/1,
     cheat/1,
-    state/0,
     count/1,
+    state/0,
+    store/0,
     score/0,
     fetch/0,
     clean/0,
     fetch/1,
     clean/1
+]).
+-export([
+    reset/1
 ]).
 -export([
     score/2,
@@ -92,6 +96,8 @@ count(K) ->
     end.
 state() ->
     gen_statem:call(?MODULE,state).
+store() ->
+    gen_statem:cast(?MODULE,store).
 score() ->
     gen_statem:call(?MODULE,score).
 fetch() ->
@@ -103,12 +109,16 @@ fetch(T) ->
 clean(T) ->
     gen_statem:call(?MODULE,{clean,T}).
 
+reset(T) ->
+    gen_statem:cast(?MODULE,{reset,T}).
+
 score(R,C) ->
     gen_statem:cast(?MODULE,{{score,R},C}).
 fetch(R,C) ->
     gen_statem:cast(?MODULE,{{fetch,R},C}).
 clean(R,T) ->
     gen_statem:cast(?MODULE,{{clean,R},T}).
+
 
 
 common(cast,{point,K},[O,Q]) ->
@@ -310,6 +320,9 @@ common({call,From},{count,K},[O,Q]) ->
     {keep_state,[O,Q],[{reply,From,get(K)}]};
 common({call,From},state,[O,Q]) ->
     {keep_state,[O,Q],[{reply,From,[O,Q]}]};
+common(cast,store,[O,Q]) ->
+    lfu_utils:ets_reset([?ETS_KEYS_TABLE_NAME,?ETS_PIDS_TABLE_NAME]),
+    {keep_state,[O,Q]};
 common({call,From},score,[O,Q]) ->
     {next_state,offset,[O,Q,#{from => From, order => score}],[{next_event,internal,{score,{previous,{?SCORE_OFFSET,O}}}}]};
 common({call,From},fetch,[O,Q]) ->
@@ -325,9 +338,6 @@ common({call,From},{clean,T},[O,Q]) ->
 common(cast,{reset,T},[O,Q]) ->
     NQ = resetting(T,Q),
     {keep_state,[O,NQ]};
-common({call,From},{reset,T},[O,Q]) ->
-    NQ = resetting(T,Q),
-    {keep_state,[O,NQ],[{reply,From,ready}]};
 common(cast,{{score,_R},_S},_StateData) ->
     keep_state_and_data;
 common(cast,{{fetch,_R},ready},_StateData) ->
@@ -429,6 +439,8 @@ offset({call,_From},{count,_K},_StateData) ->
     {keep_state_and_data,[postpone]};
 offset({call,_From},state,_StateData) ->
     {keep_state_and_data,[postpone]};
+offset(cast,store,_StateData) ->
+    {keep_state_and_data,[postpone]};
 offset({call,_From},score,_StateData) ->
     {keep_state_and_data,[postpone]};
 offset({call,_From},fetch,_StateData) ->
@@ -438,6 +450,8 @@ offset({call,_From},clean,_StateData) ->
 offset({call,_From},{fetch,_T},_StateData) ->
     {keep_state_and_data,[postpone]};
 offset({call,_From},{clean,_T},_StateData) ->
+    {keep_state_and_data,[postpone]};
+offset(cast,{reset,_T},_StateData) ->
     {keep_state_and_data,[postpone]};
 offset(cast,_EventContent,_StateData) ->
     keep_state_and_data;
@@ -502,6 +516,8 @@ select({call,_From},{count,_K},_StateData) ->
     {keep_state_and_data,[postpone]};
 select({call,_From},state,_StateData) ->
     {keep_state_and_data,[postpone]};
+select(cast,store,_StateData) ->
+    {keep_state_and_data,[postpone]};
 select({call,_From},score,_StateData) ->
     {keep_state_and_data,[postpone]};
 select({call,_From},fetch,_StateData) ->
@@ -511,6 +527,8 @@ select({call,_From},clean,_StateData) ->
 select({call,_From},{fetch,_T},_StateData) ->
     {keep_state_and_data,[postpone]};
 select({call,_From},{clean,_T},_StateData) ->
+    {keep_state_and_data,[postpone]};
+select(cast,{reset,_T},_StateData) ->
     {keep_state_and_data,[postpone]};
 select(cast,_EventContent,_StateData) ->
     keep_state_and_data;
@@ -540,6 +558,8 @@ delete({call,_From},{count,_K},_StateData) ->
     {keep_state_and_data,[postpone]};
 delete({call,_From},state,_StateData) ->
     {keep_state_and_data,[postpone]};
+delete(cast,store,_StateData) ->
+    {keep_state_and_data,[postpone]};
 delete({call,_From},score,_StateData) ->
     {keep_state_and_data,[postpone]};
 delete({call,_From},fetch,_StateData) ->
@@ -549,6 +569,8 @@ delete({call,_From},clean,_StateData) ->
 delete({call,_From},{fetch,_T},_StateData) ->
     {keep_state_and_data,[postpone]};
 delete({call,_From},{clean,_T},_StateData) ->
+    {keep_state_and_data,[postpone]};
+delete(cast,{reset,_T},_StateData) ->
     {keep_state_and_data,[postpone]};
 delete(cast,_EventContent,_StateData) ->
     keep_state_and_data;

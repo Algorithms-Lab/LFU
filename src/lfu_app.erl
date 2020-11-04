@@ -18,18 +18,5 @@ stop(_ETS_TABLES) ->
     ok.
 
 prep_stop(ETS_TABLES) ->
-    reset_tables(ETS_TABLES),
-%   application:get_env(lfu,tcp,off) == on andalso application:stop(ranch),
+    lfu_utils:ets_reset(ETS_TABLES),
     ok.
-
-
-reset_tables(ETS_TABLES) ->
-    lists:foreach(
-        fun(ETS_TABLE) ->
-            ets:whereis(ETS_TABLE) =/= undefined andalso
-            ets:tab2file(
-                ETS_TABLE,
-                element(2,file:get_cwd()) ++ "/" ++ application:get_env(lfu,ets_dir,"priv") ++ "/" ++ atom_to_list(ETS_TABLE),
-            [{sync,application:get_env(lfu,ets_sync_reset,true)}])
-        end,
-    ETS_TABLES).

@@ -5,10 +5,23 @@
     for/3,
     key_validation/1,
     ets_create/0,
-    ets_re_create/0
+    ets_re_create/0,
+    ets_reset/1
 ]).
 -include("include/lfu.hrl").
 
+
+
+ets_reset(TL) ->
+    lists:foreach(
+        fun(T) ->
+            ets:whereis(T) =/= undefined andalso
+            ets:tab2file(
+                T,
+                element(2,file:get_cwd()) ++ "/" ++ application:get_env(lfu,ets_dir,"priv") ++ "/" ++ atom_to_list(T),
+            [{sync,application:get_env(lfu,ets_sync_reset,true)}])
+        end,
+    TL).
 
 ets_delete(T) ->
     catch ets:delete(T).
