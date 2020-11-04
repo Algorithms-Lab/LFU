@@ -185,6 +185,16 @@ max key size
 
     STATE                   %% JSON: "{O:NUMBER,Q:NUMBER}"
 
+#### store algorithm state to disk
+###### Please pay attantion, 'store' call executes asynchronously!
+###### internal:
+
+    lfu:store().
+
+###### external:
+
+    STORE                   %% "OK"
+
 #### execute scoring of offset counter
 ###### internal:
 
