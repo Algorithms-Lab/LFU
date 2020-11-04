@@ -10,12 +10,15 @@
 -include("include/lfu.hrl").
 
 
+ets_delete(T) ->
+    catch ets:delete(T).
+
 ets_create() ->
     NT = ets:new(?ETS_KEYS_FETCH_TABLE_NAME,?ETS_KEYS_FETCH_TABLE_OPTS),
     case get(?ETS_KEYS_FETCH_TABLE_NAME) of
         undefined -> skip;
         OT ->
-            ets:info(OT) =/= undefined andalso catch ets:delete(OT)
+            ets:info(OT) =/= undefined andalso ets_delete(OT)
     end,
     put(?ETS_KEYS_FETCH_TABLE_NAME,NT),
     NT.
