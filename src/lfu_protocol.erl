@@ -97,6 +97,15 @@ common(info,{tcp,S,<<"STATE",_/binary>>},[S,T]) ->
             T:send(S,<<"{","ERROR",":","UNKNOW_ERROR","}">>)
     end,
     keep_state_and_data;
+common(info,{tcp,S,<<"STORE",_/binary>>},[S,T]) ->
+    T:setopts(S,[{active,once}]),
+    case lfu:store() of
+        ok ->
+            T:send(S,<<"OK">>);
+        _ ->
+            T:send(S,<<"{","ERROR",":","UNKNOW_ERROR","}">>)
+    end,
+    keep_state_and_data;
 common(info,{tcp,S,<<"SCORE",_/binary>>},[S,T]) ->
     T:setopts(S,[{active,once}]),
     case lfu:score() of
@@ -184,6 +193,8 @@ delete(info,{tcp,_S,<<"CHEAT",_:1/binary,_P/binary>>},_StateData) ->
 delete(info,{tcp,_S,<<"COUNT",_:1/binary,_P/binary>>},_StateData) ->
     {keep_state_and_data,[postpone]};
 delete(info,{tcp,_S,<<"STATE",_/binary>>},_StateData) ->
+    {keep_state_and_data,[postpone]};
+delete(info,{tcp,_S,<<"STORE",_/binary>>},_StateData) ->
     {keep_state_and_data,[postpone]};
 delete(info,{tcp,_S,<<"SCORE",_/binary>>},_StateData) ->
     {keep_state_and_data,[postpone]};
