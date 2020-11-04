@@ -313,10 +313,10 @@ common({call,From},state,[O,Q]) ->
 common({call,From},score,[O,Q]) ->
     {next_state,offset,[O,Q,#{from => From, order => score}],[{next_event,internal,{score,{previous,{?SCORE_OFFSET,O}}}}]};
 common({call,From},fetch,[O,Q]) ->
-    T = lfu_utils:ets_re_create(),
+    T = lfu_utils:ets_create(),
     {next_state,offset,[O,Q,#{from => From, tid => T, ets => internal, order => fetch}],[{next_event,internal,{score,{previous,{?SCORE_OFFSET,O}}}}]};
 common({call,From},clean,[O,Q]) ->
-    T = lfu_utils:ets_re_create(),
+    T = lfu_utils:ets_create(),
     {next_state,offset,[O,Q,#{from => From, tid => T, ets => internal, order => clean}],[{next_event,internal,{score,{previous,{?SCORE_OFFSET,O}}}}]};
 common({call,From},{fetch,T},[O,Q]) ->
     {next_state,offset,[O,Q,#{from => From, tid => T, ets => external, order => fetch}],[{next_event,internal,{score,{previous,{?SCORE_OFFSET,O}}}}]};
@@ -458,7 +458,7 @@ select(internal,fetch,[O,Q,#{tid := T} = MD]) ->
     end;
 select(state_timeout,T,[O,Q,#{tid := T, from := From, order := Order, ets := internal} = _MD]) ->
    % io:format("TimeoutState:~p~nMD:~p~nO:~p~nQ~p~n~n",[select,MD,O,Q]),
-    NT = lfu_utils:ets_re_create(ets:tab2list(T)),
+    NT = lfu_utils:ets_re_create(),
     if
         Order =:= fetch ->
             {next_state,common,[O,Q],[{reply,From,NT}]};
@@ -723,13 +723,10 @@ scoring(L,U,R) ->
     end.
 
 resetting(T,Q) ->
-    TL = case ets:info(T) of
-        undefined -> [];
-        _ -> ets:tab2list(T)
-    end,
     put(reset,0),
-    lists:foreach(
-        fun({_,KL}) ->
+    ets:info(T) =/= undefined andalso
+    ets:foldl(
+        fun({_,KL},[]) ->
             lists:foreach(
                 fun(K) ->
                     ets:delete(?ETS_KEYS_TABLE_NAME,K),
@@ -756,21 +753,16 @@ resetting(T,Q) ->
                     end,
                     put(reset,get(reset)+1)
                 end,
-            KL)
+            KL),[]
         end,
-    TL),
+    [],T),
     Q - erase(reset).
 
 restorage(T) ->
-    TL = case ets:whereis(T) of
-        undefined -> [];
-        _ -> ets:tab2list(T)
-    end,
-    %io:format("+!!!!!TL:~p!!!!!+~n",[TL]),
-
     put(quantity,0),
-    lists:foreach(
-        fun({K,V}) ->
+    ets:whereis(T) =/= undefined andalso
+    ets:foldl(
+        fun({K,V},[]) ->
             if
                 V =< ?MAX_ORDER ->
                     if
@@ -786,7 +778,7 @@ restorage(T) ->
                     ?SUPPORT andalso erlang:apply(?AUXILIARY,cheat,[[{K,V}]]);
                 true ->
                     ?SUPPORT andalso erlang:apply(?AUXILIARY,cheat,[[{K,V}]])
-            end
+            end,[]
         end,
-    TL),
+    [],T),
     erase(quantity).

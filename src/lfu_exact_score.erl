@@ -162,37 +162,33 @@ insert(L,U,T) ->
     ).
 
 restorage(T,L,U,O) ->
-    TL = case ets:whereis(T) of
-        undefined -> [];
-        _ -> ets:tab2list(T)
-    end,
-    %io:format("+!!!!!TL:~p!!!!!+~n",[TL]),
-
     put(quantity,0),
     if
         O == 0 ->
-            lists:foreach(
-                fun({K,V}) ->
-                    put(K,V),
-                    V > ?SCORE_OFFSET andalso put(quantity,get(quantity)+1)
+            ets:foldl(
+                fun({K,V},[]) ->
+                    if
+                        V >= L andalso V =< U ->
+                            put(K,V),
+                            V > ?SCORE_OFFSET andalso put(quantity,get(quantity)+1),
+                            [];
+                        true ->
+                            []
+                    end
                 end,
-                lists:filter(
-                    fun({_,V}) ->
-                        V >= L andalso V =< U
-                    end,
-                TL)
-            );
+            [],T);
         true ->
-            lists:foreach(
-                fun({K,V}) ->
-                    put(K,V),
-                    put(quantity,get(quantity)+1)
+            ets:foldl(
+                fun({K,V},[]) ->
+                    if
+                        V >= L andalso V =< U ->
+                            put(K,V),
+                            put(quantity,get(quantity)+1),
+                            [];
+                        true ->
+                            []
+                    end
                 end,
-                lists:filter(
-                    fun({_,V}) ->
-                        V >= L andalso V =< U
-                    end,
-                TL)
-            )
+            [],T)
     end,
     erase(quantity).

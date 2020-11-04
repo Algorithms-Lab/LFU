@@ -4,26 +4,41 @@
 -export([
     for/3,
     key_validation/1,
-    ets_re_create/0,
-    ets_re_create/1
+    ets_create/0,
+    ets_re_create/0
 ]).
 -include("include/lfu.hrl").
 
 
+ets_delete(T) ->
+    catch ets:delete(T).
 
-ets_re_create() ->
-    ets_re_create([]).
-ets_re_create(D) when is_list(D) ->
+ets_create() ->
+    NT = ets:new(?ETS_KEYS_FETCH_TABLE_NAME,?ETS_KEYS_FETCH_TABLE_OPTS),
     case get(?ETS_KEYS_FETCH_TABLE_NAME) of
         undefined -> skip;
-        T ->
-            case ets:info(T) of
+        OT ->
+            ets:info(OT) =/= undefined andalso ets_delete(OT)
+    end,
+    put(?ETS_KEYS_FETCH_TABLE_NAME,NT),
+    NT.
+
+ets_re_create() ->
+    NT = ets:new(?ETS_KEYS_FETCH_TABLE_NAME,?ETS_KEYS_FETCH_TABLE_OPTS),
+    case get(?ETS_KEYS_FETCH_TABLE_NAME) of
+        undefined -> skip;
+        OT ->
+            case ets:info(OT) of
                 undefined -> skip;
-                _ -> catch ets:delete(T)
+                _ ->
+                    ets:foldl(
+                        fun({K,V},[]) ->
+                            ets:insert(NT,{K,V}),[]
+                        end,
+                    [],OT),
+                    catch ets:delete(OT)
             end
     end,
-    NT = ets:new(?ETS_KEYS_FETCH_TABLE_NAME,?ETS_KEYS_FETCH_TABLE_OPTS),
-    ets:insert(NT,D),
     put(?ETS_KEYS_FETCH_TABLE_NAME,NT),
     NT.
 
