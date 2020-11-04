@@ -120,7 +120,6 @@ clean(R,T) ->
     gen_statem:cast(?MODULE,{{clean,R},T}).
 
 
-
 common(cast,{point,K},[O,Q]) ->
     case get(K) of
         undefined ->
