@@ -36,6 +36,12 @@ init(ETS_TABLES) ->
        ] ++
        case application:get_env(lfu,tcp,off) of
            on ->
+               [
+                   {
+                       ranch,{ranch_app,start,[0,0]},
+                       permanent,5000,worker,[ranch_app]
+                   }
+               ] ++
                [ranch:child_spec(
                    {?MODULE,lfu_protocol},ranch_tcp,
                    #{
