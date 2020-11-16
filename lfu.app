@@ -1,6 +1,6 @@
 {application,lfu,[
     {description,"Least Frequently Used Algorithm"},
-    {vsn,"2.1.0"},
+    {vsn,"2.1.1"},
     {modules,[
         lfu_app,lfu_sup,lfu,
         lfu_score_sups_sup,lfu_protocol,
@@ -15,7 +15,7 @@
         lfu_quick_score_sup
     ]},
     {applications,[kernel,stdlib]},
-    {included_applications,[]},
+    {included_applications,[ranch]},
     {mod,{lfu_app,[]}},
     {start_phases,[]},
     {env,[]},
