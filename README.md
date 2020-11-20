@@ -142,21 +142,52 @@ excerpt from 'ranch' documentation:
 #### max_key_size
 max key size
 
+## quick start
+#### like OTP application into your Erlang node
 
+    erl -config lfu.config
+    application:start(lfu)
+
+#### like daemon into your Unix-like OS
+
+    mkdir release
+    tar -xf priv/lfu.tar.gz -C release/
+    
+    cp priv/lfu.tar.gz release/.
+    cp priv/init release/.
+    cp priv/stop release/.
+    cp lfu.config release/sys.config
+    
+    cd release
+    
+    mkdir bin
+    mkdir log
+    mkdir pipe
+    
+    cp erts-11.1/bin/start.src bin/start
+    cp erts-11.1/bin/start_erl.src bin/start_erl
+    cp erts-11.1/bin/run_erl bin/.
+    cp erts-11.1/bin/to_erl bin/.
+    cp erts-11.1/bin/erl bin/.
+    cp erts-11.1/bin/heart bin/.
+    cp erts-11.1/bin/escript bin/.
+    
+    perl -i -pe "s#%FINAL_ROOTDIR%#$PWD#" bin/start
+    
+    sed -i 's/\/tmp/$ROOTDIR\/pipe/' bin/start
+    sed -i 's/\(.*run_erl.*\)".*$/\1 -sname lfu -init_debug +t 10485760\"/' bin/start
+    
+    echo "11.1 1" > releases/start_erl.data
+    
+    ./init startd
+    ./init stop
+    
+    
 ## client interface
 ###### This section describes two types interfaces:
 
     internal - erlang interface for inner interaction in Erlang node
     external - outside interface for interaction from the world outside
-
-#### launch
-###### internal:
-
-    application:start(lfu).
-
-###### external:
-
-    bin/start
 
 #### put key
 ###### internal:
@@ -260,7 +291,8 @@ max key size
     CHEAT:key1,counter1;key2,counter2;key3,counter3 %% OK
 
 
-## configuration
+## configuration (under hood)
+#### Before corrects settings make sure you understand the implementation!
 
     -define(MIN_LIMIT,100000).
     -define(MAX_LIMIT,1000000000).
