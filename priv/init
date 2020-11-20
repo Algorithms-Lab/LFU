@@ -1,0 +1,52 @@
+#!/bin/bash
+
+NAME="lfu" 
+APP=$NAME"_app"
+TNODE=$NAME"@"`hostname -s`
+CNODE=$NAME`date +_nodeclt_%H_%M_%S_%N`
+
+export ERL_MAX_ETS_TABLES=140000
+
+ACTION=$1
+
+if [ "" = "$ACTION" ];
+then
+    echo "
+        USAGE:
+            $0  <command> [<arg> ...]
+            MANAGE
+                start              - start up node - 'attached'
+                startd             - start up node - 'detached'
+                attach             - attach to running node
+                stop               - stops application and halts the node
+        "
+else
+    echo "
+        INFO:
+            NAME:                $NAME
+            TNODE:               $TNODE
+            CNODE:               $CNODE
+            PWD:                 $PWD
+            APP:                 $APP
+        "
+    cd $PWD
+    case "$ACTION" in
+        "start")
+            bin/start
+            sleep 3
+            bin/to_erl pipe/
+            ;;
+        "startd")
+            bin/start
+            ;;
+        "attach")
+            bin/to_erl pipe/
+            ;;
+        "stop")
+            escript "stop" $CNODE $TNODE 
+            ;;
+        *)
+            echo "UNKNOW COMMAND!"
+            ;;
+    esac
+fi;

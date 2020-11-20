@@ -1,0 +1,8 @@
+#!/usr/bin/env escript
+%% -*- erlang -*-
+
+main([CNode,TNode]) ->
+    {ok, _} = net_kernel:start([list_to_atom(CNode),shortnames]),
+    Res = rpc:call(list_to_atom(TNode),init,stop,[]),
+    io:fwrite("==> ~p~n",[Res]).
+    
