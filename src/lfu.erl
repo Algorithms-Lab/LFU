@@ -248,7 +248,7 @@ common(cast,{cheat,KVL},[O,Q]) ->
                                 end
                             );
                         true ->
-                            lfu_utils:for(0,(V-1) div ?MIN_LIMIT,
+                            lfu_utils:for(0,(?MAX_LIMIT-1) div ?MIN_LIMIT,
                                 fun(I) ->
                                     N = list_to_atom("o0" ++ integer_to_list(I)),
                                     case whereis(N) of
