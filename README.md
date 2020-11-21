@@ -156,7 +156,6 @@ max key size
     cp priv/lfu.tar.gz release/.
     cp priv/init release/.
     cp priv/stop release/.
-    cp lfu.config release/sys.config
     
     cd release
     
@@ -291,7 +290,7 @@ max key size
     CHEAT:key1,counter1;key2,counter2;key3,counter3 %% OK
 
 
-## configuration (under hood)
+## configuration (under the hood)
 #### Before corrects settings make sure you understand the implementation!
 
     -define(MIN_LIMIT,100000).
