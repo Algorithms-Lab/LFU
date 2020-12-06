@@ -95,7 +95,6 @@ point_handler(K,Q) ->
             put(K,1),
             Q+1;
         C ->
-            put(K,C+1),
             Q
     end.
 cheat_handler(K,V,Q) ->
