@@ -268,7 +268,7 @@ common(cast,{cheat,KVL},[O,Q]) ->
                                     end,
                                     if
                                         I == (V-1) div ?MAX_LIMIT ->
-                                            lfu_quick_score:cheat(N,K,1);
+                                            lfu_quick_score:point(N,K);
                                         true -> skip
                                     end
                                 end
