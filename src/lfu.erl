@@ -796,10 +796,10 @@ restorage(T) ->
                     end,
                     put(K,V),
                     V > ?SCORE_OFFSET andalso put(quantity,get(quantity)+1),
-                    ?SUPPORT andalso erlang:apply(?AUXILIARY,cheat,[[{K,V}]]);
+                    [];
                 true ->
-                    ?SUPPORT andalso erlang:apply(?AUXILIARY,cheat,[[{K,V}]])
-            end,[]
+                    []
+            end
         end,
     [],T),
     erase(quantity).
