@@ -51,7 +51,7 @@
 
 -ifdef(support).
     -define(SUPPORT,true).
-    -define(AUXILIARY,kit).
+    -define(AUXILIARY,any).
 -else.
     -define(SUPPORT,false).
     -define(AUXILIARY,any).

@@ -153,7 +153,6 @@ max key size
     mkdir release
     tar -xf priv/lfu.tar.gz -C release/
     
-    cp priv/lfu.tar.gz release/.
     cp priv/init release/.
     cp priv/stop release/.
     
