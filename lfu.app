@@ -1,6 +1,6 @@
 {application,lfu,[
     {description,"Least Frequently Used Algorithm"},
-    {vsn,"2.1.4"},
+    {vsn,"2.2.0"},
     {modules,[
         lfu_app,lfu_sup,lfu,
         lfu_score_sups_sup,lfu_protocol,
