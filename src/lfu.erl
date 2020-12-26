@@ -109,8 +109,8 @@ fetch(T) ->
 clean(T) ->
     gen_statem:call(?MODULE,{clean,T}).
 
-reset(T) ->
-    gen_statem:cast(?MODULE,{reset,T}).
+reset(D) ->
+    gen_statem:cast(?MODULE,{reset,D}).
 
 score(R,C) ->
     gen_statem:cast(?MODULE,{{score,R},C}).
@@ -334,8 +334,8 @@ common({call,From},{fetch,T},[O,Q]) ->
     {next_state,offset,[O,Q,#{from => From, tid => T, ets => external, order => fetch}],[{next_event,internal,{score,{previous,{?SCORE_OFFSET,O}}}}]};
 common({call,From},{clean,T},[O,Q]) ->
     {next_state,offset,[O,Q,#{from => From, tid => T, ets => external, order => clean}],[{next_event,internal,{score,{previous,{?SCORE_OFFSET,O}}}}]};
-common(cast,{reset,T},[O,Q]) ->
-    NQ = resetting(T,Q),
+common(cast,{reset,D},[O,Q]) ->
+    NQ = resetting(D,Q),
     {keep_state,[O,NQ]};
 common(cast,{{score,_R},_S},_StateData) ->
     keep_state_and_data;
@@ -743,6 +743,36 @@ scoring(L,U,R) ->
             L1 + L2
     end.
 
+resetting({_,KL},Q) ->
+    put(reset,0),
+    lists:foreach(
+        fun(K) ->
+            ets:delete(?ETS_KEYS_TABLE_NAME,K),
+            C = erase(K),
+            if
+                (C-1) div ?MAX_LIMIT == 0 ->
+                    N  = list_to_atom("o0" ++ integer_to_list((C-1) div ?MIN_LIMIT)),
+                    case whereis(N) of
+                        undefined ->
+                            lfu_exact_score_sup:start([(C-1) div ?MIN_LIMIT,0]),
+                            lfu_exact_score:reset(N,K);
+                        _ ->
+                            lfu_exact_score:reset(N,K)
+                    end;
+                true ->
+                    N = list_to_atom("o" ++ integer_to_list((C-1) div ?MAX_LIMIT)),
+                    case whereis(N) of
+                        undefined ->
+                            lfu_quick_score_sup:start([(C-1) div ?MAX_LIMIT,0]),
+                            lfu_quick_score:reset(N,K);
+                        true ->
+                            lfu_quick_score:reset(N,K)
+                    end
+            end,
+            put(reset,get(reset)+1)
+        end,
+    KL),
+    Q - erase(reset);
 resetting(T,Q) ->
     put(reset,0),
     ets:info(T) =/= undefined andalso
