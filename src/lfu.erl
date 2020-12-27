@@ -43,7 +43,7 @@
 start_link() ->
     gen_statem:start_link(
         {local,?MODULE},
-        ?MODULE,[?MIN_ORDER,0,?ETS_KEYS_TABLE_NAME],
+        ?MODULE,[?MIN_ORDER,0,?ETS_KEYS_STORE_TABLE_NAME],
     [{spawn_opt,?SPAWN_OPT_LFU}]).
 
 
@@ -132,7 +132,7 @@ common(cast,{point,K},[O,Q]) ->
                      lfu_exact_score:point(N,K)
             end,
             put(K,1),
-            ets:insert(?ETS_KEYS_TABLE_NAME,{K,1}),
+            ets:insert(?ETS_KEYS_STORE_TABLE_NAME,{K,1}),
             ?SUPPORT andalso erlang:apply(?AUXILIARY,point,[K]),
             {keep_state,[O,if ?SCORE_OFFSET == 0 -> Q+1; true -> Q end]};
         C when C < ?MAX_ORDER ->
@@ -194,7 +194,7 @@ common(cast,{point,K},[O,Q]) ->
                 true -> skip
             end,
             put(K,C+1),
-            ets:insert(?ETS_KEYS_TABLE_NAME,{K,C+1}),
+            ets:insert(?ETS_KEYS_STORE_TABLE_NAME,{K,C+1}),
             ?SUPPORT andalso erlang:apply(?AUXILIARY,point,[K]),
             {keep_state,[O,if (C+1) / (?SCORE_OFFSET+1) == 1 -> Q+1; true -> Q end]};
         _ ->
@@ -285,7 +285,7 @@ common(cast,{cheat,KVL},[O,Q]) ->
                     if
                         V > 0 ->
                             put(K,V),
-                            ets:insert(?ETS_KEYS_TABLE_NAME,{K,V}),
+                            ets:insert(?ETS_KEYS_STORE_TABLE_NAME,{K,V}),
                             if
                                 V > ?SCORE_OFFSET -> true;
                                 true -> false
@@ -296,7 +296,7 @@ common(cast,{cheat,KVL},[O,Q]) ->
                     if
                         V > 0 ->
                             put(K,V),
-                            ets:insert(?ETS_KEYS_TABLE_NAME,{K,V}),
+                            ets:insert(?ETS_KEYS_STORE_TABLE_NAME,{K,V}),
                             if
                                 OV =< ?SCORE_OFFSET andalso V > ?SCORE_OFFSET -> true;
                                 true -> false
@@ -304,9 +304,9 @@ common(cast,{cheat,KVL},[O,Q]) ->
                         true ->
                             if
                                 OV > ?SCORE_OFFSET ->
-                                    erase(K),ets:delete(?ETS_KEYS_TABLE_NAME,K),put(clean,get(clean)+1),false;
+                                    erase(K),ets:delete(?ETS_KEYS_STORE_TABLE_NAME,K),put(clean,get(clean)+1),false;
                                 true ->
-                                    erase(K),ets:delete(?ETS_KEYS_TABLE_NAME,K),false
+                                    erase(K),ets:delete(?ETS_KEYS_STORE_TABLE_NAME,K),false
                             end
                     end
             end;
@@ -320,7 +320,7 @@ common({call,From},{count,K},[O,Q]) ->
 common({call,From},state,[O,Q]) ->
     {keep_state,[O,Q],[{reply,From,[O,Q]}]};
 common(cast,store,[O,Q]) ->
-    lfu_utils:ets_reset([?ETS_KEYS_TABLE_NAME,?ETS_PIDS_TABLE_NAME]),
+    lfu_utils:ets_reset([?ETS_KEYS_STORE_TABLE_NAME,?ETS_PIDS_STORE_TABLE_NAME]),
     {keep_state,[O,Q]};
 common({call,From},score,[O,Q]) ->
     {next_state,offset,[O,Q,#{from => From, order => score}],[{next_event,internal,{score,{previous,{?SCORE_OFFSET,O}}}}]};
@@ -747,7 +747,7 @@ resetting({_,KL},Q) ->
     put(reset,0),
     lists:foreach(
         fun(K) ->
-            ets:delete(?ETS_KEYS_TABLE_NAME,K),
+            ets:delete(?ETS_KEYS_STORE_TABLE_NAME,K),
             C = erase(K),
             if
                 (C-1) div ?MAX_LIMIT == 0 ->
@@ -780,7 +780,7 @@ resetting(T,Q) ->
         fun({_,KL},[]) ->
             lists:foreach(
                 fun(K) ->
-                    ets:delete(?ETS_KEYS_TABLE_NAME,K),
+                    ets:delete(?ETS_KEYS_STORE_TABLE_NAME,K),
                     C = erase(K),
                     if
                         (C-1) div ?MAX_LIMIT == 0 ->
