@@ -17,8 +17,8 @@
 
 
 start_link() ->
-    {ok,PID} = supervisor:start_link({local,?MODULE},?MODULE,[?ETS_KEYS_TABLE_NAME,?ETS_PIDS_TABLE_NAME]),
-    {ok,PID,[?ETS_KEYS_TABLE_NAME,?ETS_PIDS_TABLE_NAME]}.
+    {ok,PID} = supervisor:start_link({local,?MODULE},?MODULE,[?ETS_KEYS_STORE_TABLE_NAME,?ETS_PIDS_STORE_TABLE_NAME]),
+    {ok,PID,[?ETS_KEYS_STORE_TABLE_NAME,?ETS_PIDS_STORE_TABLE_NAME]}.
 
 
 init(ETS_TABLES) ->

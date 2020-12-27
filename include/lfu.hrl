@@ -16,8 +16,8 @@
 -define(PREFIX_KEY,"lfu___").
 -define(POSTFIX_KEY,"__lfu").
 
--define(ETS_PIDS_TABLE_NAME,lfu_pid).
--define(ETS_KEYS_TABLE_NAME,lfu_key).
+-define(ETS_PIDS_STORE_TABLE_NAME,lfu_pid).
+-define(ETS_KEYS_STORE_TABLE_NAME,lfu_key).
 -define(ETS_KEYS_FETCH_TABLE_NAME,lfu_key_fetch).
 -define(ETS_KEYS_FETCH_TABLE_OPTS,[
     public,bag,{write_concurrency,true},

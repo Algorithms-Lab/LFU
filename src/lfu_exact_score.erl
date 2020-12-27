@@ -32,15 +32,15 @@ start([O,Q]) ->
 
 
 init([O,Q]) ->
-    case ets:lookup(?ETS_PIDS_TABLE_NAME,list_to_binary(?PREFIX_KEY ++ "o0" ++ integer_to_list(O) ++ ?POSTFIX_KEY)) of
+    case ets:lookup(?ETS_PIDS_STORE_TABLE_NAME,list_to_binary(?PREFIX_KEY ++ "o0" ++ integer_to_list(O) ++ ?POSTFIX_KEY)) of
         [] ->
-            ets:insert(?ETS_PIDS_TABLE_NAME,{
+            ets:insert(?ETS_PIDS_STORE_TABLE_NAME,{
                 list_to_binary(?PREFIX_KEY ++ "o0" ++ integer_to_list(O) ++ ?POSTFIX_KEY),
             self()}),
 	    {ok,[O,Q]};
         _ ->
-            NQ = restorage(?ETS_KEYS_TABLE_NAME,?MIN_LIMIT*O+1,?MIN_LIMIT*(O+1),O),
-            ets:insert(?ETS_PIDS_TABLE_NAME,{
+            NQ = restorage(?ETS_KEYS_STORE_TABLE_NAME,?MIN_LIMIT*O+1,?MIN_LIMIT*(O+1),O),
+            ets:insert(?ETS_PIDS_STORE_TABLE_NAME,{
                 list_to_binary(?PREFIX_KEY ++ "o0" ++ integer_to_list(O) ++ ?POSTFIX_KEY),
             self()}),
             {ok,[O,NQ]}

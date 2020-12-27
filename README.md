@@ -310,8 +310,8 @@ max key size
     -define(PREFIX_KEY,"lfu___").
     -define(POSTFIX_KEY,"__lfu").
 
-    -define(ETS_PIDS_TABLE_NAME,lfu_pid).
-    -define(ETS_KEYS_TABLE_NAME,lfu_key).
+    -define(ETS_PIDS_STORE_TABLE_NAME,lfu_pid).
+    -define(ETS_KEYS_STORE_TABLE_NAME,lfu_key).
     
     -define(ETS_KEYS_FETCH_TABLE_NAME,lfu_key_fetch).
     -define(ETS_KEYS_FETCH_TABLE_OPTS,[
@@ -406,11 +406,11 @@ The prefix key for service name of key for to store process counter pids in 'lfu
 
 The postfix key for service name of key for to store process counter pids in 'lfu_key' ets.
 
-#### ETS_PIDS_TABLE_NAME
+#### ETS_PIDS_STORE_TABLE_NAME
 
 The ets for to store process counter pids.
 
-#### ETS_KEYS_TABLE_NAME
+#### ETS_KEYS_STORE_TABLE_NAME
 
 The ets for to store counters by keys.
 
