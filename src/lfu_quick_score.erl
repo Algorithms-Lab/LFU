@@ -94,7 +94,7 @@ point_handler(K,Q) ->
         undefined ->
             put(K,1),
             Q+1;
-        C ->
+        _ ->
             Q
     end.
 cheat_handler(K,V,Q) ->
@@ -120,17 +120,14 @@ insert(I,T) ->
     KL =/= [] andalso ets:insert(T,{I*?MAX_LIMIT,KL}).
 
 restorage(T,L,U) ->
-    put(quantity,0),
     ets:foldl(
-        fun({K,V},[]) ->
+        fun({K,V},Q) ->
             if
                 V >= L andalso V =< U ->
                     put(K,1),
-                    put(quantity,get(quantity)+1),
-                    [];
+                    Q + 1;
                 true ->
-                    []
+                    Q
             end
         end,
-    [],T),
-    erase(quantity).
+    0,T).

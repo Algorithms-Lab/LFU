@@ -162,33 +162,32 @@ insert(L,U,T) ->
     ).
 
 restorage(T,L,U,O) ->
-    put(quantity,0),
     if
         O == 0 ->
             ets:foldl(
-                fun({K,V},[]) ->
+                fun({K,V},Q) ->
                     if
                         V >= L andalso V =< U ->
                             put(K,V),
-                            V > ?SCORE_OFFSET andalso put(quantity,get(quantity)+1),
-                            [];
+                            if
+                                V > ?SCORE_OFFSET -> Q + 1;
+                                true -> Q
+                            end;
                         true ->
-                            []
+                            Q
                     end
                 end,
-            [],T);
+            0,T);
         true ->
             ets:foldl(
-                fun({K,V},[]) ->
+                fun({K,V},Q) ->
                     if
                         V >= L andalso V =< U ->
                             put(K,V),
-                            put(quantity,get(quantity)+1),
-                            [];
+                            Q + 1;
                         true ->
-                            []
+                            Q
                     end
                 end,
-            [],T)
-    end,
-    erase(quantity).
+            0,T)
+    end.

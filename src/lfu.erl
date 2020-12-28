@@ -202,8 +202,8 @@ common(cast,{point,K},[O,Q]) ->
             {keep_state,[O,Q]}
     end;
 common(cast,{cheat,KVL},[O,Q]) ->
-    NQ = length(lists:filter(
-        fun({K,V}) when V =< ?MAX_ORDER ->
+    NQ = lists:foldl(
+        fun({K,V},NQ) when V =< ?MAX_ORDER ->
             case get(K) of
                 undefined -> skip;
                 C ->
@@ -276,10 +276,6 @@ common(cast,{cheat,KVL},[O,Q]) ->
                      end;
                 true -> skip
             end,
-            case get(clean) of
-                undefined -> put(clean,0);
-                _ -> skip
-            end,
             case get(K) of
                 undefined ->
                     if
@@ -287,10 +283,10 @@ common(cast,{cheat,KVL},[O,Q]) ->
                             put(K,V),
                             ets:insert(?ETS_KEYS_STORE_TABLE_NAME,{K,V}),
                             if
-                                V > ?SCORE_OFFSET -> true;
-                                true -> false
+                                V > ?SCORE_OFFSET -> NQ + 1;
+                                true -> NQ
                             end;
-                        true -> false
+                        true -> NQ
                     end;
                 OV ->
                     if
@@ -298,22 +294,22 @@ common(cast,{cheat,KVL},[O,Q]) ->
                             put(K,V),
                             ets:insert(?ETS_KEYS_STORE_TABLE_NAME,{K,V}),
                             if
-                                OV =< ?SCORE_OFFSET andalso V > ?SCORE_OFFSET -> true;
-                                true -> false
+                                OV =< ?SCORE_OFFSET andalso V > ?SCORE_OFFSET -> NQ + 1;
+                                true -> NQ
                             end;
                         true ->
                             if
                                 OV > ?SCORE_OFFSET ->
-                                    erase(K),ets:delete(?ETS_KEYS_STORE_TABLE_NAME,K),put(clean,get(clean)+1),false;
+                                    erase(K),ets:delete(?ETS_KEYS_STORE_TABLE_NAME,K),NQ - 1;
                                 true ->
-                                    erase(K),ets:delete(?ETS_KEYS_STORE_TABLE_NAME,K),false
+                                    erase(K),ets:delete(?ETS_KEYS_STORE_TABLE_NAME,K),NQ
                             end
                     end
             end;
-        (_) ->
-            false
+        (_,NQ) ->
+            NQ
         end,
-    KVL))+Q-erase(clean),
+    Q,KVL),
     {keep_state,[O,NQ]};
 common({call,From},{count,K},[O,Q]) ->
     {keep_state,[O,Q],[{reply,From,get(K)}]};
@@ -744,47 +740,15 @@ scoring(L,U,R) ->
     end.
 
 resetting({_,KL},Q) ->
-    put(reset,0),
-    lists:foreach(
-        fun(K) ->
-            ets:delete(?ETS_KEYS_STORE_TABLE_NAME,K),
-            C = erase(K),
-            if
-                (C-1) div ?MAX_LIMIT == 0 ->
-                    N  = list_to_atom("o0" ++ integer_to_list((C-1) div ?MIN_LIMIT)),
-                    case whereis(N) of
-                        undefined ->
-                            lfu_exact_score_sup:start([(C-1) div ?MIN_LIMIT,0]),
-                            lfu_exact_score:reset(N,K);
-                        _ ->
-                            lfu_exact_score:reset(N,K)
-                    end;
-                true ->
-                    N = list_to_atom("o" ++ integer_to_list((C-1) div ?MAX_LIMIT)),
-                    case whereis(N) of
-                        undefined ->
-                            lfu_quick_score_sup:start([(C-1) div ?MAX_LIMIT,0]),
-                            lfu_quick_score:reset(N,K);
-                        true ->
-                            lfu_quick_score:reset(N,K)
-                    end
-            end,
-            put(reset,get(reset)+1)
-        end,
-    KL),
-    Q - erase(reset);
-resetting(T,Q) ->
-    put(reset,0),
-    ets:info(T) =/= undefined andalso
-    ets:foldl(
-        fun({_,KL},[]) ->
-            lists:foreach(
-                fun(K) ->
+    lists:foldl(
+        fun(K,NQ) ->
+            case erase(K) of
+                undefined -> NQ;
+                C ->
                     ets:delete(?ETS_KEYS_STORE_TABLE_NAME,K),
-                    C = erase(K),
                     if
                         (C-1) div ?MAX_LIMIT == 0 ->
-                            N  = list_to_atom("o0" ++ integer_to_list((C-1) div ?MIN_LIMIT)),
+                            N = list_to_atom("o0" ++ integer_to_list((C-1) div ?MIN_LIMIT)),
                             case whereis(N) of
                                 undefined ->
                                     lfu_exact_score_sup:start([(C-1) div ?MIN_LIMIT,0]),
@@ -798,38 +762,78 @@ resetting(T,Q) ->
                                 undefined ->
                                     lfu_quick_score_sup:start([(C-1) div ?MAX_LIMIT,0]),
                                     lfu_quick_score:reset(N,K);
-                                true ->
+                                _ ->
                                     lfu_quick_score:reset(N,K)
                             end
                     end,
-                    put(reset,get(reset)+1)
-                end,
-            KL),[]
-        end,
-    [],T),
-    Q - erase(reset).
-
-restorage(T) ->
-    put(quantity,0),
-    ets:whereis(T) =/= undefined andalso
-    ets:foldl(
-        fun({K,V},[]) ->
-            if
-                V =< ?MAX_ORDER ->
-                    if
-                        V div ?MAX_LIMIT =< 1 ->
-                            N = list_to_atom("o0" ++ integer_to_list((V -1)div ?MIN_LIMIT)),
-                            whereis(N) =:= undefined andalso lfu_exact_score_sup:start([(V-1) div ?MIN_LIMIT,0]);
-                        true ->
-                            N = list_to_atom("o" ++ integer_to_list((V-1) div ?MAX_LIMIT)),
-                            whereis(N) =:= undefined andalso lfu_quick_score_sup:start([(V-1) div ?MAX_LIMIT,0])
-                    end,
-                    put(K,V),
-                    V > ?SCORE_OFFSET andalso put(quantity,get(quantity)+1),
-                    [];
-                true ->
-                    []
+                    NQ - 1
             end
         end,
-    [],T),
-    erase(quantity).
+    Q,KL);
+resetting(T,Q) ->
+    case ets:info(T) of
+        undefined -> Q;
+        _ ->
+            ets:foldl(
+                fun({_,KL},NQ) ->
+                    lists:foldl(
+                        fun(K,NQ) ->
+                            case erase(K) of
+                                undefined -> NQ;
+                                C ->
+                                    ets:delete(?ETS_KEYS_STORE_TABLE_NAME,K),
+                                    if
+                                        (C-1) div ?MAX_LIMIT == 0 ->
+                                            N = list_to_atom("o0" ++ integer_to_list((C-1) div ?MIN_LIMIT)),
+                                            case whereis(N) of
+                                                undefined ->
+                                                    lfu_exact_score_sup:start([(C-1) div ?MIN_LIMIT,0]),
+                                                    lfu_exact_score:reset(N,K);
+                                                _ ->
+                                                    lfu_exact_score:reset(N,K)
+                                            end;
+                                        true ->
+                                            N = list_to_atom("o" ++ integer_to_list((C-1) div ?MAX_LIMIT)),
+                                            case whereis(N) of
+                                                undefined ->
+                                                    lfu_quick_score_sup:start([(C-1) div ?MAX_LIMIT,0]),
+                                                    lfu_quick_score:reset(N,K);
+                                                _ ->
+                                                    lfu_quick_score:reset(N,K)
+                                            end
+                                    end,
+                                    NQ - 1
+                            end
+                        end,
+                    NQ,KL)
+                end,
+            Q,T)
+    end.
+
+restorage(T) ->
+    case ets:whereis(T) of
+        undefined -> 0;
+        _ ->
+            ets:foldl(
+                fun({K,V},Q) ->
+                    if
+                        V =< ?MAX_ORDER ->
+                            if
+                                V div ?MAX_LIMIT =< 1 ->
+                                    N = list_to_atom("o0" ++ integer_to_list((V -1)div ?MIN_LIMIT)),
+                                    whereis(N) =:= undefined andalso lfu_exact_score_sup:start([(V-1) div ?MIN_LIMIT,0]);
+                                true ->
+                                    N = list_to_atom("o" ++ integer_to_list((V-1) div ?MAX_LIMIT)),
+                                    whereis(N) =:= undefined andalso lfu_quick_score_sup:start([(V-1) div ?MAX_LIMIT,0])
+                            end,
+                            put(K,V),
+                            if
+                                V > ?SCORE_OFFSET -> Q + 1;
+                                true -> Q
+                            end;
+                        true ->
+                            Q
+                    end
+                end,
+            0,T)
+    end.
