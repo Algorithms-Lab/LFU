@@ -102,12 +102,22 @@ score() ->
     gen_statem:call(?MODULE,score).
 fetch() ->
     gen_statem:call(?MODULE,fetch).
-clean() ->
-    gen_statem:call(?MODULE,clean).
 fetch(T) ->
     gen_statem:call(?MODULE,{fetch,T}).
+clean() ->
+    gen_statem:call(?MODULE,{clean,async}).
+clean(async) ->
+    gen_statem:call(?MODULE,{clean,async});
+clean(sync) ->
+    gen_statem:call(?MODULE,{clean,sync});
 clean(T) ->
-    gen_statem:call(?MODULE,{clean,T}).
+    gen_statem:call(?MODULE,{clean,{async,T}}).
+clean(async,T) ->
+    gen_statem:call(?MODULE,{clean,{async,T}});
+clean(sync,T) ->
+    gen_statem:call(?MODULE,{clean,{sync,T}});
+clean(R,T) ->
+    gen_statem:cast(?MODULE,{{clean,R},T}).
 
 reset(D) ->
     gen_statem:cast(?MODULE,{reset,D}).
@@ -116,8 +126,6 @@ score(R,C) ->
     gen_statem:cast(?MODULE,{{score,R},C}).
 fetch(R,C) ->
     gen_statem:cast(?MODULE,{{fetch,R},C}).
-clean(R,T) ->
-    gen_statem:cast(?MODULE,{{clean,R},T}).
 
 
 common(cast,{point,K},[O,Q]) ->
@@ -323,13 +331,18 @@ common({call,From},score,[O,Q]) ->
 common({call,From},fetch,[O,Q]) ->
     T = lfu_utils:ets_create(),
     {next_state,offset,[O,Q,#{from => From, tid => T, ets => internal, order => fetch}],[{next_event,internal,{score,{previous,{?SCORE_OFFSET,O}}}}]};
-common({call,From},clean,[O,Q]) ->
-    T = lfu_utils:ets_create(),
-    {next_state,offset,[O,Q,#{from => From, tid => T, ets => internal, order => clean}],[{next_event,internal,{score,{previous,{?SCORE_OFFSET,O}}}}]};
 common({call,From},{fetch,T},[O,Q]) ->
     {next_state,offset,[O,Q,#{from => From, tid => T, ets => external, order => fetch}],[{next_event,internal,{score,{previous,{?SCORE_OFFSET,O}}}}]};
-common({call,From},{clean,T},[O,Q]) ->
-    {next_state,offset,[O,Q,#{from => From, tid => T, ets => external, order => clean}],[{next_event,internal,{score,{previous,{?SCORE_OFFSET,O}}}}]};
+common({call,From},{clean,async},[O,Q]) ->
+    T = lfu_utils:ets_create(),
+    {next_state,offset,[O,Q,#{from => From, tid => T, ets => internal, order => clean, mode => async}],[{next_event,internal,{score,{previous,{?SCORE_OFFSET,O}}}}]};
+common({call,From},{clean,sync},[O,Q]) ->
+    T = lfu_utils:ets_create(),
+    {next_state,offset,[O,Q,#{from => From, tid => T, ets => internal, order => clean, mode => sync}],[{next_event,internal,{score,{previous,{?SCORE_OFFSET,O}}}}]};
+common({call,From},{clean,{async,T}},[O,Q]) ->
+    {next_state,offset,[O,Q,#{from => From, tid => T, ets => external, order => clean, mode => async}],[{next_event,internal,{score,{previous,{?SCORE_OFFSET,O}}}}]};
+common({call,From},{clean,{sync,T}},[O,Q]) ->
+    {next_state,offset,[O,Q,#{from => From, tid => T, ets => external, order => clean, mode => sync}],[{next_event,internal,{score,{previous,{?SCORE_OFFSET,O}}}}]};
 common(cast,{reset,D},[O,Q]) ->
     NQ = resetting(D,Q),
     {keep_state,[O,NQ]};
@@ -404,7 +417,7 @@ offset(internal,count,[O,Q,#{previous := P, current := C, following := F, from :
                     {next_state,select,[O,Q,#{from => From, tid => maps:get(tid,MD), ets => maps:get(ets,MD), order => fetch}],[{next_event,internal,fetch}]};
                 Order =:= clean ->
                     %% idle iteration but necessary
-                    {next_state,select,[O,Q,#{from => From, tid => maps:get(tid,MD), ets => maps:get(ets,MD), order => clean}],[{next_event,internal,fetch}]}
+                    {next_state,select,[O,Q,#{from => From, tid => maps:get(tid,MD), ets => maps:get(ets,MD), order => clean, mode => maps:get(mode,MD)}],[{next_event,internal,fetch}]}
             end;
         C / Q * 100 < ?MIN_OFFSET andalso O*10 =< ?MAX_ORDER andalso F / Q * 100 =< ?MAX_OFFSET ->
             {keep_state,[O*10,Q,MD#{previous => C, current => F, following => 0}],[{next_event,internal,{score,{following,{O*100,O*1000}}}}]};
@@ -417,7 +430,7 @@ offset(internal,count,[O,Q,#{previous := P, current := C, following := F, from :
                 Order =:= fetch ->
                     {next_state,select,[O,Q,#{from => From, tid => maps:get(tid,MD), ets => maps:get(ets,MD), order => fetch}],[{next_event,internal,fetch}]};
                 Order =:= clean ->
-                    {next_state,select,[O,Q,#{from => From, tid => maps:get(tid,MD), ets => maps:get(ets,MD), order => clean}],[{next_event,internal,fetch}]}
+                    {next_state,select,[O,Q,#{from => From, tid => maps:get(tid,MD), ets => maps:get(ets,MD), order => clean, mode => maps:get(mode,MD)}],[{next_event,internal,fetch}]}
             end
     end;
 offset(cast,{{score,_},_S},_StateData) ->
@@ -440,11 +453,9 @@ offset({call,_From},score,_StateData) ->
     {keep_state_and_data,[postpone]};
 offset({call,_From},fetch,_StateData) ->
     {keep_state_and_data,[postpone]};
-offset({call,_From},clean,_StateData) ->
-    {keep_state_and_data,[postpone]};
 offset({call,_From},{fetch,_T},_StateData) ->
     {keep_state_and_data,[postpone]};
-offset({call,_From},{clean,_T},_StateData) ->
+offset({call,_From},{clean,_D},_StateData) ->		%% _D = {async,tid()} || {sync,tid()} || async || sync
     {keep_state_and_data,[postpone]};
 offset(cast,{reset,_T},_StateData) ->
     {keep_state_and_data,[postpone]};
@@ -465,24 +476,34 @@ select(internal,fetch,[O,Q,#{tid := T} = MD]) ->
         true ->
             {keep_state,[O,Q,MD#{number => N, ref => R}],[{state_timeout,0,T}]}
     end;
-select(state_timeout,T,[O,Q,#{tid := T, from := From, order := Order, ets := internal} = _MD]) ->
+select(state_timeout,T,[O,Q,#{tid := T, from := From, order := Order, ets := internal} = MD]) ->
    % io:format("TimeoutState:~p~nMD:~p~nO:~p~nQ~p~n~n",[select,MD,O,Q]),
     NT = lfu_utils:ets_re_create(),
     if
         Order =:= fetch ->
             {next_state,common,[O,Q],[{reply,From,NT}]};
         Order =:= clean ->
-            R1 = make_ref(),
-            {next_state,delete,[O,Q,#{tid => NT, ref => R1}],[{reply,From,{NT,R1}},{state_timeout,?TIMEOUT_STATE_DELETE,NT}]}
+            case maps:get(mode,MD) of
+                async ->
+                    {next_state,delete,[O,Q,#{tid => NT, from => From}],[{next_event,internal,clean}]};
+                sync ->
+                    R = make_ref(),
+                    {next_state,delete,[O,Q,#{tid => NT, ref => R}],[{reply,From,{NT,R}},{state_timeout,?TIMEOUT_STATE_DELETE,NT}]}
+            end
     end;
-select(state_timeout,T,[O,Q,#{tid := T, from := From, order := Order, ets := external} = _MD]) ->
+select(state_timeout,T,[O,Q,#{tid := T, from := From, order := Order, ets := external} = MD]) ->
    % io:format("TimeoutState:~p~nMD:~p~nO:~p~nQ~p~n~n",[select,MD,O,Q]),
     if
         Order =:= fetch ->
             {next_state,common,[O,Q],[{reply,From,T}]};
         Order =:= clean ->
-            R1 = make_ref(),
-            {next_state,delete,[O,Q,#{tid => T, ref => R1}],[{reply,From,{T,R1}},{state_timeout,?TIMEOUT_STATE_DELETE,T}]}
+            case maps:get(mode,MD) of
+                async ->
+                    {next_state,delete,[O,Q,#{tid => T, from  => From}],[{next_event,internal,clean}]};
+                sync ->
+                    R = make_ref(),
+                    {next_state,delete,[O,Q,#{tid => T, ref => R}],[{reply,From,{T,R}},{state_timeout,?TIMEOUT_STATE_DELETE,T}]}
+            end
     end;
 select(cast,{{fetch,R},ready},[O,Q,#{number := N, tid := T, from := From, order := Order, ref := R} = MD]) ->
     if
@@ -493,8 +514,13 @@ select(cast,{{fetch,R},ready},[O,Q,#{number := N, tid := T, from := From, order 
                 Order =:= fetch ->
                     {next_state,common,[O,Q],[{reply,From,T}]};
                 Order =:= clean ->
-                    R1 = make_ref(),
-                    {next_state,delete,[O,Q,#{tid => T, ref => R1}],[{reply,From,{T,R1}},{state_timeout,?TIMEOUT_STATE_DELETE,T}]}
+                    case maps:get(mode,MD) of
+                        async ->
+                            {next_state,delete,[O,Q,#{tid => T, from => From}],[{next_event,internal,clean}]};
+                        sync ->
+                            R1 = make_ref(),
+                            {next_state,delete,[O,Q,#{tid => T, ref => R1}],[{reply,From,{T,R1}},{state_timeout,?TIMEOUT_STATE_DELETE,T}]}
+                    end
             end
     end;
 select(cast,{{fetch,_R},ready},_StateData) ->
@@ -517,11 +543,9 @@ select({call,_From},score,_StateData) ->
     {keep_state_and_data,[postpone]};
 select({call,_From},fetch,_StateData) ->
     {keep_state_and_data,[postpone]};
-select({call,_From},clean,_StateData) ->
-    {keep_state_and_data,[postpone]};
 select({call,_From},{fetch,_T},_StateData) ->
     {keep_state_and_data,[postpone]};
-select({call,_From},{clean,_T},_StateData) ->
+select({call,_From},{clean,_D},_StateData) ->			%% _D = {async,tid()} || {sync,tid()} || async || sync
     {keep_state_and_data,[postpone]};
 select(cast,{reset,_T},_StateData) ->
     {keep_state_and_data,[postpone]};
@@ -532,6 +556,10 @@ select({call,_From},_EventContent,_StateData) ->
 select(info,_EventContent,_StateData) ->
     keep_state_and_data.
 
+delete(internal,clean,[O,Q,#{tid := T, from := From}]) ->
+    NQ = resetting(T,Q),
+    ?SUPPORT andalso erlang:apply(?AUXILIARY,reset,[T]),
+    {next_state,common,[O,NQ],[{reply,From,T}]};
 delete(state_timeout,T,[O,Q,#{tid := T, ref := _R}]) ->
    % io:format("TimeoutState:~p~nT:~p~nO:~p~nQ~p~n~n",[delete,T,O,Q]),
     {next_state,common,[O,Q]};
@@ -559,11 +587,9 @@ delete({call,_From},score,_StateData) ->
     {keep_state_and_data,[postpone]};
 delete({call,_From},fetch,_StateData) ->
     {keep_state_and_data,[postpone]};
-delete({call,_From},clean,_StateData) ->
-    {keep_state_and_data,[postpone]};
 delete({call,_From},{fetch,_T},_StateData) ->
     {keep_state_and_data,[postpone]};
-delete({call,_From},{clean,_T},_StateData) ->
+delete({call,_From},{clean,_D},_StateData) ->			%% _D = {async,tid()} || {sync,tid()} || async || sync
     {keep_state_and_data,[postpone]};
 delete(cast,{reset,_T},_StateData) ->
     {keep_state_and_data,[postpone]};
