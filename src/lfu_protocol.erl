@@ -136,9 +136,9 @@ common(info,{tcp,S,<<"FETCH",_/binary>>},[S,T]) ->
             T:send(S,<<"{","ERROR",":","UNKNOW_ERROR","}">>)
     end,
     keep_state_and_data;
-common(info,{tcp,S,<<"CLEAN",_/binary>>},[S,T]) ->
+common(info,{tcp,S,<<"CLEAN",":","SYNC",_/binary>>},[S,T]) ->
     T:setopts(S,[{active,once}]),
-    case lfu:clean() of
+    case lfu:clean(sync) of
         {TID,R} when is_reference(TID) andalso is_reference(R) ->
             BD = ets:foldl(
                 fun({K,V},BA) ->
@@ -159,10 +159,54 @@ common(info,{tcp,S,<<"CLEAN",_/binary>>},[S,T]) ->
             T:send(S,<<"{","ERROR",":","UNKNOW_ERROR","}">>),
             keep_state_and_data
     end;
+common(info,{tcp,S,<<"CLEAN",":","ASYNC",_/binary>>},[S,T]) ->
+    T:setopts(S,[{active,once}]),
+    case lfu:clean(async) of
+        TID when is_reference(TID) ->
+            BD = ets:foldl(
+                fun({K,V},BA) ->
+                    BK = integer_to_binary(K),
+                    BV = pack_list_to_binary(V,<<>>),
+                    case BA of
+                        <<>> ->
+                            <<"{",BK/binary,":",BV/binary,"}">>;
+                        BA ->
+                            <<BA/binary,",","{",BK/binary,":",BV/binary,"}">>
+                    end
+                end,
+            <<>>,TID),
+            T:send(S,<<"[",BD/binary,"]">>),
+            keep_state_and_data;
+        _ ->
+            T:send(S,<<"{","ERROR",":","UNKNOW_ERROR","}">>),
+            keep_state_and_data
+    end;
 common(info,{tcp,S,<<"CLEAN",":",_P/binary>>},[S,T]) ->
     T:setopts(S,[{active,once}]),
     T:send(S,<<"{","ERROR",":","EXPIRED_REF","}">>),
     keep_state_and_data;
+common(info,{tcp,S,<<"CLEAN",_/binary>>},[S,T]) ->
+    T:setopts(S,[{active,once}]),
+    case lfu:clean(async) of
+        TID when is_reference(TID) ->
+            BD = ets:foldl(
+                fun({K,V},BA) ->
+                    BK = integer_to_binary(K),
+                    BV = pack_list_to_binary(V,<<>>),
+                    case BA of
+                        <<>> ->
+                            <<"{",BK/binary,":",BV/binary,"}">>;
+                        BA ->
+                            <<BA/binary,",","{",BK/binary,":",BV/binary,"}">>
+                    end
+                end,
+            <<>>,TID),
+            T:send(S,<<"[",BD/binary,"]">>),
+            keep_state_and_data;
+        _ ->
+            T:send(S,<<"{","ERROR",":","UNKNOW_ERROR","}">>),
+            keep_state_and_data
+    end;
 common(info,{tcp,S,_B},[S,T]) ->
     T:setopts(S,[{active,once}]),
     T:send(S,<<"{","ERROR",":","UNKNOW_COMMAND","}">>),
@@ -170,7 +214,7 @@ common(info,{tcp,S,_B},[S,T]) ->
 
 delete(state_timeout,BR,[S,T,#{ref := BR, tid := _T}]) ->
     {next_state,common,[S,T]};
-delete(info,{tcp,S,<<"CLEAN",_:1/binary,P/binary>>},[S,T,#{ref := BR, tid := TID}]) ->
+delete(info,{tcp,S,<<"CLEAN",":",P/binary>>},[S,T,#{ref := BR, tid := TID}]) ->
     T:setopts(S,[{active,once}]),
     case break_binary_string(P) =:= BR of
         true ->
