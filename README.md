@@ -31,6 +31,8 @@ Note that the implementation of algorithm support two interaction modes:
 
 But actually nothing forbidens to interact in both modes at same time.
 
+Both types of interface developed to IPACR (Interaction Protocol of Algorithms Cache Replacement) conformance.
+
 
 ##### note №2:
 Note that the implementation of algorithm stores keys in binary, that is, for set of keys from the first example bellow key will be stored as in second example:
@@ -187,6 +189,8 @@ max key size
     internal - erlang interface for inner interaction in Erlang node
     external - outside interface for interaction from the world outside
 
+###### Both types of interface developed to IPACR (Interaction Protocol of Algorithms Cache Replacement) conformance.
+
 #### put key
 ###### internal:
 
@@ -194,7 +198,7 @@ max key size
 
 ###### external:
 
-    POINT:key               %% "OK"
+    POINT:key                 %% "OK"
 
 #### get counter on key
 ###### internal:
@@ -203,7 +207,7 @@ max key size
 
 ###### external:
 
-    COUNT:key               %% "NUMBER"
+    COUNT:key                 %% "NUMBER"
 
 #### get offset counter and counter all keys
 ###### internal:
@@ -212,7 +216,7 @@ max key size
 
 ###### external:
 
-    STATE                   %% JSON: "{O:NUMBER,Q:NUMBER}"
+    STATE                     %% JSON: "{O:NUMBER,Q:NUMBER}"
 
 #### store algorithm state to disk
 ###### Please pay attantion, 'store' call executes asynchronously!
@@ -222,7 +226,7 @@ max key size
 
 ###### external:
 
-    STORE                   %% "OK"
+    STORE                     %% "OK"
 
 #### execute scoring of offset counter
 ###### internal:
@@ -231,52 +235,80 @@ max key size
 
 ###### external:
 
-    SCORE                   %% "READY"
+    SCORE                     %% "READY"
 
 #### execute scoring of offset counter and get keys by it into internal table
 ###### internal:
 ###### Please pay attantion, that exist of internal table expires after following request to fetching 'fetch/0' or to clean 'clean/0'!
 
-    T = lfu:fetch().        %% tid()
+    T = lfu:fetch().          %% tid()
     ets:tab2list(T).
 
 ###### external:
 
-    FETCH                   %% JSON: "[{number1:[key1,key2,key3]},{number2:[key1,key2,key3]},{number3:[key1,key2,key3]},...]"
+    FETCH                     %% JSON: "[{number1:[key1,key2,key3]},{number2:[key1,key2,key3]},{number3:[key1,key2,key3]},...]"
 
 #### execute scoring of offset counter and get keys by it into external table
 ###### Please pay attantion, that it`s preferably using interface with internal table 'fetch/0', because it ensures a data consistency with your system!
 ###### internal:
 
-    T = ets:new(stub,[      %% tid()
+    T = ets:new(stub,[        %% tid()
         bag,public,{write_concurrency,true},
         {decentralized_counters,true}
     ]).
     lfu:fetch(T).
     ets:tab2list(T).
     
-#### execute scoring of offset counter and get keys by it into internal table for follow delete
+#### execute scoring of offset counter and get keys by it into internal table for follow delete (support both interaction types)
+##### without confirm
 ###### internal:
 ###### Please pay attantion, that exist of internal table expires after following request to fetching 'fetch/0' or to clean 'clean/0'!
 
-    {T,R} = lfu:clean().    %% {tid(),ref()}
+    T = lfu:clean().          %% tid()
+    or
+    T = lfu:clean(async).     %% tid()
+
+###### external:
+
+    CLEAN                     %% JSON: "[{number1:[key1,key2,key3]},{number2:[key1,key2,key3]},{number3:[key1,key2,key3]},...]"
+    or
+    CLEAN:ASYNC               %% JSON: "[{number1:[key1,key2,key3]},{number2:[key1,key2,key3]},{number3:[key1,key2,key3]},...]"
+
+##### with confirm
+###### internal:
+###### Please pay attantion, that exist of internal table expires after following request to fetching 'fetch/0' or to clean 'clean/0'!
+
+    {T,R} = lfu:clean(sync).  %% {tid(),ref()}
     lfu:clean(R,T).
     
 ###### external:
 
-    CLEAN                   %% JSON: "{[{number1:[key1,key2,key3]},{number2:[key1,key2,key3]},{number3:[key1,key2,key3]},...]:UNIQ_REF}"
-    CLEAN:UNIQ_REF          %% OK
+    CLEAN:SYNC                %% JSON: "{[{number1:[key1,key2,key3]},{number2:[key1,key2,key3]},{number3:[key1,key2,key3]},...]:UNIQ_REF}"
+    CLEAN:UNIQ_REF            %% OK
 
-#### execute scoring of offset counter and get keys by it into external table for follow delete
+#### execute scoring of offset counter and get keys by it into external table for follow delete (support only internal interaction type)
 ######  Please pay attantion, that it`s preferably using interface with internal table 'clean/0', because it ensures a data consistency with your system!
+##### without confirm
 ###### internal:
 
-    T = ets:new(stub,[      %% tid()
+    T = ets:new(stub,[        %% tid()
         bag,public,{write_concurrency,true},
         {decentralized_counters,true}
     ]).
-    R = lfu:clean(T).       %% ref()
+    T = lfu:clean(T).         %% ref()
+    or
+    T = lfu:clean(async,T).   %% ref()
+
+##### with confirm
+###### internal:
+
+    T = ets:new(stub,[        %% tid()
+        bag,public,{write_concurrency,true},
+        {decentralized_counters,true}
+    ]).
+    {T,R} = lfu:clean(sync,T). %% ref()
     lfu:clean(R,T).
+
 
 #### put list keys with conters
 ###### initialization of state, for example, transfer of state from other implementation 'lfu'
