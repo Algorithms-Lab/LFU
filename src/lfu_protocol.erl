@@ -32,9 +32,9 @@ callback_mode() ->
 	state_functions.
 
 
-common(info,{tcp,S,<<"POINT",_:1/binary,P/binary>>},[S,T]) ->
+common(info,{tcp,S,<<"POINT:",P/binary>>},[S,T]) ->
     T:setopts(S,[{active,once}]),
-    K = break_binary_string(P),
+    K = break_binary_string(byte_size(P),P),
     case lfu:point(K) of
         ok ->
             T:send(S,<<"OK">>);
@@ -46,7 +46,7 @@ common(info,{tcp,S,<<"POINT",_:1/binary,P/binary>>},[S,T]) ->
             T:send(S,<<"{","ERROR",":","UNKNOW_ERROR","}">>)
     end,
     keep_state_and_data;
-common(info,{tcp,S,<<"CHEAT",_:1/binary,P/binary>>},[S,T]) ->
+common(info,{tcp,S,<<"CHEAT:",P/binary>>},[S,T]) ->
     T:setopts(S,[{active,once}]),
     KVL = lists:filtermap(
         fun(KV) ->
@@ -57,7 +57,7 @@ common(info,{tcp,S,<<"CHEAT",_:1/binary,P/binary>>},[S,T]) ->
                     false
             end
         end,
-    binary:split(break_binary_string(P),<<";">>,[global])),
+    binary:split(break_binary_string(byte_size(P),P),<<";">>,[global])),
     case lfu:cheat(KVL) of
         ok ->
             T:send(S,<<"OK">>);
@@ -69,9 +69,9 @@ common(info,{tcp,S,<<"CHEAT",_:1/binary,P/binary>>},[S,T]) ->
             T:send(S,<<"{","ERROR",":","UNKNOW_ERROR","}">>)
     end,
     keep_state_and_data;
-common(info,{tcp,S,<<"COUNT",_:1/binary,P/binary>>},[S,T]) ->
+common(info,{tcp,S,<<"COUNT:",P/binary>>},[S,T]) ->
     T:setopts(S,[{active,once}]),
-    K = break_binary_string(P),
+    K = break_binary_string(byte_size(P),P),
     case lfu:count(K) of
         "type_error" ->
             T:send(S,<<"{","ERROR",":","TYPE_ERROR","}">>);
@@ -86,7 +86,7 @@ common(info,{tcp,S,<<"COUNT",_:1/binary,P/binary>>},[S,T]) ->
            T:send(S,<<"{","ERROR",":","UNKNOW_ERROR","}">>)
     end,
     keep_state_and_data;
-common(info,{tcp,S,<<"STATE",_/binary>>},[S,T]) ->
+common(info,{tcp,S,<<"STATE",E/binary>>},[S,T]) when E =:= <<>> orelse E =:= <<"\r\n">> orelse E =:= <<"\n">> orelse E =:= <<"\r">> ->
     T:setopts(S,[{active,once}]),
     case lfu:state() of
         [O,Q] ->
@@ -97,7 +97,7 @@ common(info,{tcp,S,<<"STATE",_/binary>>},[S,T]) ->
             T:send(S,<<"{","ERROR",":","UNKNOW_ERROR","}">>)
     end,
     keep_state_and_data;
-common(info,{tcp,S,<<"STORE",_/binary>>},[S,T]) ->
+common(info,{tcp,S,<<"STORE",E/binary>>},[S,T]) when E =:= <<>> orelse E =:= <<"\r\n">> orelse E =:= <<"\n">> orelse E =:= <<"\r">> ->
     T:setopts(S,[{active,once}]),
     case lfu:store() of
         ok ->
@@ -106,7 +106,7 @@ common(info,{tcp,S,<<"STORE",_/binary>>},[S,T]) ->
             T:send(S,<<"{","ERROR",":","UNKNOW_ERROR","}">>)
     end,
     keep_state_and_data;
-common(info,{tcp,S,<<"SCORE",_/binary>>},[S,T]) ->
+common(info,{tcp,S,<<"SCORE",E/binary>>},[S,T]) when E =:= <<>> orelse E =:= <<"\r\n">> orelse E =:= <<"\n">> orelse E =:= <<"\r">> ->
     T:setopts(S,[{active,once}]),
     case lfu:score() of
         ready ->
@@ -115,7 +115,7 @@ common(info,{tcp,S,<<"SCORE",_/binary>>},[S,T]) ->
             T:send(S,<<"{","ERROR",":","UNKNOW_ERROR","}">>)
     end,
     keep_state_and_data;
-common(info,{tcp,S,<<"FETCH",_/binary>>},[S,T]) ->
+common(info,{tcp,S,<<"FETCH",E/binary>>},[S,T]) when E =:= <<>> orelse E =:= <<"\r\n">> orelse E =:= <<"\n">> orelse E =:= <<"\r">> ->
     T:setopts(S,[{active,once}]),
     case catch ets:info(lfu:fetch()) of
         I when is_list(I) -> 
@@ -136,7 +136,7 @@ common(info,{tcp,S,<<"FETCH",_/binary>>},[S,T]) ->
             T:send(S,<<"{","ERROR",":","UNKNOW_ERROR","}">>)
     end,
     keep_state_and_data;
-common(info,{tcp,S,<<"CLEAN",":","SYNC",_/binary>>},[S,T]) ->
+common(info,{tcp,S,<<"CLEAN",":","SYNC",E/binary>>},[S,T]) when E =:= <<>> orelse E =:= <<"\r\n">> orelse E =:= <<"\n">> orelse E =:= <<"\r">> ->
     T:setopts(S,[{active,once}]),
     case lfu:clean(sync) of
         {TID,R} when is_reference(TID) andalso is_reference(R) ->
@@ -159,7 +159,7 @@ common(info,{tcp,S,<<"CLEAN",":","SYNC",_/binary>>},[S,T]) ->
             T:send(S,<<"{","ERROR",":","UNKNOW_ERROR","}">>),
             keep_state_and_data
     end;
-common(info,{tcp,S,<<"CLEAN",":","ASYNC",_/binary>>},[S,T]) ->
+common(info,{tcp,S,<<"CLEAN",":","ASYNC",E/binary>>},[S,T]) when E =:= <<>> orelse E =:= <<"\r\n">> orelse E =:= <<"\n">> orelse E =:= <<"\r">> ->
     T:setopts(S,[{active,once}]),
     case lfu:clean(async) of
         TID when is_reference(TID) ->
@@ -185,7 +185,7 @@ common(info,{tcp,S,<<"CLEAN",":",_P/binary>>},[S,T]) ->
     T:setopts(S,[{active,once}]),
     T:send(S,<<"{","ERROR",":","EXPIRED_REF","}">>),
     keep_state_and_data;
-common(info,{tcp,S,<<"CLEAN",_/binary>>},[S,T]) ->
+common(info,{tcp,S,<<"CLEAN",E/binary>>},[S,T]) when E =:= <<>> orelse E =:= <<"\r\n">> orelse E =:= <<"\n">> orelse E =:= <<"\r">> ->
     T:setopts(S,[{active,once}]),
     case lfu:clean(async) of
         TID when is_reference(TID) ->
@@ -214,9 +214,13 @@ common(info,{tcp,S,_B},[S,T]) ->
 
 delete(state_timeout,BR,[S,T,#{ref := BR, tid := _T}]) ->
     {next_state,common,[S,T]};
+delete(info,{tcp,_S,<<"CLEAN:ASYNC",E/binary>>},_StateData) when E =:= <<>> orelse E =:= <<"\r\n">> orelse E =:= <<"\n">> orelse E =:= <<"\r">> ->
+    {keep_state_and_data,[postpone]};
+delete(info,{tcp,_S,<<"CLEAN:SYNC",E/binary>>},_StateData) when E =:= <<>> orelse E =:= <<"\r\n">> orelse E =:= <<"\n">> orelse E =:= <<"\r">> ->
+    {keep_state_and_data,[postpone]};
 delete(info,{tcp,S,<<"CLEAN",":",P/binary>>},[S,T,#{ref := BR, tid := TID}]) ->
     T:setopts(S,[{active,once}]),
-    case break_binary_string(P) =:= BR of
+    case break_binary_string(byte_size(P),P) =:= BR of
         true ->
             case lfu:clean(list_to_ref(binary_to_list(BR)),TID) of
                 ok ->
@@ -230,21 +234,21 @@ delete(info,{tcp,S,<<"CLEAN",":",P/binary>>},[S,T,#{ref := BR, tid := TID}]) ->
            T:send(S,<<"{","ERROR",":","UNKNOW_REF","}">>),
            keep_state_and_data
      end;
-delete(info,{tcp,_S,<<"POINT",_:1/binary,_P/binary>>},_StateData) ->
+delete(info,{tcp,_S,<<"POINT:",_P/binary>>},_StateData) ->
     {keep_state_and_data,[postpone]};
-delete(info,{tcp,_S,<<"CHEAT",_:1/binary,_P/binary>>},_StateData) ->
+delete(info,{tcp,_S,<<"CHEAT:",_P/binary>>},_StateData) ->
     {keep_state_and_data,[postpone]};
-delete(info,{tcp,_S,<<"COUNT",_:1/binary,_P/binary>>},_StateData) ->
+delete(info,{tcp,_S,<<"COUNT:",_P/binary>>},_StateData) ->
     {keep_state_and_data,[postpone]};
-delete(info,{tcp,_S,<<"STATE",_/binary>>},_StateData) ->
+delete(info,{tcp,_S,<<"STATE",E/binary>>},_StateData) when E =:= <<>> orelse E =:= <<"\r\n">> orelse E =:= <<"\n">> orelse E =:= <<"\r">> ->
     {keep_state_and_data,[postpone]};
-delete(info,{tcp,_S,<<"STORE",_/binary>>},_StateData) ->
+delete(info,{tcp,_S,<<"STORE",E/binary>>},_StateData) when E =:= <<>> orelse E =:= <<"\r\n">> orelse E =:= <<"\n">> orelse E =:= <<"\r">> ->
     {keep_state_and_data,[postpone]};
-delete(info,{tcp,_S,<<"SCORE",_/binary>>},_StateData) ->
+delete(info,{tcp,_S,<<"SCORE",E/binary>>},_StateData) when E =:= <<>> orelse E =:= <<"\r\n">> orelse E =:= <<"\n">> orelse E =:= <<"\r">> ->
     {keep_state_and_data,[postpone]};
-delete(info,{tcp,_S,<<"FETCH",_/binary>>},_StateData) ->
+delete(info,{tcp,_S,<<"FETCH",E/binary>>},_StateData) when E =:= <<>> orelse E =:= <<"\r\n">> orelse E =:= <<"\n">> orelse E =:= <<"\r">> ->
     {keep_state_and_data,[postpone]};
-delete(info,{tcp,_S,<<"CLEAN",_/binary>>},_StateData) ->
+delete(info,{tcp,_S,<<"CLEAN",E/binary>>},_StateData) when E =:= <<>> orelse E =:= <<"\r\n">> orelse E =:= <<"\n">> orelse E =:= <<"\r">> ->
     {keep_state_and_data,[postpone]};
 delete(info,{tcp,S,_B},[S,T,_MD]) ->
     T:setopts(S,[{active,once}]),
@@ -272,5 +276,14 @@ pack_list_to_binary([H|T],B) ->
             pack_list_to_binary(T,<<B/binary,",",H/binary>>)
     end.
     
-break_binary_string(B) ->
-    hd(binary:split(B,<<"\r\n">>,[global])).
+break_binary_string(S,B) ->
+    case B of
+        <<B1:(S-2)/binary,"\r\n">> ->
+            B1;
+        <<B2:(S-1)/binary,"\n">> ->
+            B2;
+        <<B3:(S-1)/binary,"\r">> ->
+            B3;
+        _ ->
+            B
+    end.
