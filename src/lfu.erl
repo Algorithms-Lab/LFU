@@ -16,15 +16,15 @@
     fetch/0,
     clean/0,
     fetch/1,
-    clean/1
+    clean/1,
+    clean/2
 ]).
 -export([
     reset/1
 ]).
 -export([
     score/2,
-    fetch/2,
-    clean/2
+    fetch/2
 ]).
 -export([
     init/1,
