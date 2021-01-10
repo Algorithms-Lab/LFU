@@ -17,18 +17,14 @@
 
 
 start_link() ->
-    {ok,PID} = supervisor:start_link({local,?MODULE},?MODULE,[?ETS_KEYS_STORE_TABLE_NAME,?ETS_PIDS_STORE_TABLE_NAME]),
-    {ok,PID,[?ETS_KEYS_STORE_TABLE_NAME,?ETS_PIDS_STORE_TABLE_NAME]}.
+    {ok,PID} = supervisor:start_link({local,?MODULE},?MODULE,[?ETS_KEYS_STORE_TABLE_NAME]),
+    {ok,PID,[?ETS_KEYS_STORE_TABLE_NAME]}.
 
 
 init(ETS_TABLES) ->
     init_tables(ETS_TABLES),
     {ok,{
         {rest_for_one,5,300},[
-            {
-                lfu_score_sups_sup,{lfu_score_sups_sup,start_link,[]},
-                permanent,5000,supervisor,[lfu_score_sups_sup]
-            },
             {
                 lfu,{lfu,start_link,[]},
                 permanent,5000,worker,[lfu]

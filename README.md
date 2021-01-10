@@ -1,12 +1,12 @@
 # Least Frequently Used
-Potent implementation of LFU algorithm based on processes-counters with support of counter by every keys up to once quadrillion hits.
+Potent implementation of LFU algorithm based counters with support of counter by every keys up to once quadrillion hits.
 
 
 Reference Guide
 ===============
 
 ## description
-This is implementation of LFU algorithm based on processes-counters with support of counter by every keys up to once quadrillion hits.
+This is implementation of LFU algorithm based on counters with support of counter by every keys up to once quadrillion hits.
 
 #### tasks:
 
@@ -47,38 +47,6 @@ Note that the implementation of algorithm stores keys in binary, that is, for se
 ###### example №2
 
     <<"moscow">>
-
-#### notice:
-Note this implementation lfu algorithm use named processes-counters, that is atoms.
-System quantity atoms is permissible 1048576 by default.
-Maximum possible number named processes dynamic create, counts as follows:
-
-###### processes of high-order counters
-
-    (MAX_ORDER-1) div MAX_LIMIT
-
-###### by default configuration:
-
-    (100000000000000-1) div 1000000000
-
-###### processes of low-order counters
-
-    MAX_LIMIT div MIN_LIMIT
-
-###### by default configuration:
-
-    1000000000 div 100000
-
-###### full expression:
-
-    ((100000000000000-1) div 1000000000) + (1000000000 div 100000) = 109 998
-
-But it is value may be more if MAX_ORDER raise to quadrillion:
-
-    ((1000000000000000-1) div 1000000000) + (1000000000 div 100000) = 1 009 998
-
-In this case you necessary is launch the Erlang-node with key '+t'.
-
 
 ## launch options
 
@@ -194,262 +162,81 @@ max key size
 #### put key
 ###### internal:
 
-    lfu:point(K).
+    lfu:point(K).                                   %% ok
 
 ###### external:
 
-    POINT:key                 %% "OK"
+    POINT:key                                       %% "OK"
 
 #### get counter on key
 ###### internal:
 
-    lfu:count(K).
+    lfu:count(K).                                   %% counter
 
 ###### external:
 
-    COUNT:key                 %% "NUMBER"
+    COUNT:key                                       %% "NUMBER"
 
-#### get offset counter and counter all keys
+#### get least counter, most counter and quantity of keys
 ###### internal:
 
-    lfu:state().
+    lfu:state().                                    %% [least counter,most counter,quantity of keys]
 
 ###### external:
 
-    STATE                     %% JSON: "{O:NUMBER,Q:NUMBER}"
+    STATE                                           %% JSON: "{L:NUMBER,M:NUMBER,Q:NUMBER}"
 
 #### store algorithm state to disk
 ###### Please pay attantion, 'store' call executes asynchronously!
 ###### internal:
 
-    lfu:store().
+    lfu:store().                                    %% ok
 
 ###### external:
 
-    STORE                     %% "OK"
+    STORE                                           %% "OK"
 
-#### execute scoring of offset counter
+#### get key with least counter
 ###### internal:
 
-    lfu:score().
+    lfu:fetch().                                    %% {counter,[<<"key">>]}
 
 ###### external:
 
-    SCORE                     %% "READY"
+    FETCH                                           %% JSON: "{counter:[key]}"
 
-#### execute scoring of offset counter and get keys by it into internal table
-###### internal:
-###### Please pay attantion, that exist of internal table expires after following request to fetching 'fetch/0' or to clean 'clean/0'!
-
-    T = lfu:fetch().          %% tid()
-    ets:tab2list(T).
-
-###### external:
-
-    FETCH                     %% JSON: "[{number1:[key1,key2,key3]},{number2:[key1,key2,key3]},{number3:[key1,key2,key3]},...]"
-
-#### execute scoring of offset counter and get keys by it into external table
-###### Please pay attantion, that it`s preferably using interface with internal table 'fetch/0', because it ensures a data consistency with your system!
-###### internal:
-
-    T = ets:new(stub,[        %% tid()
-        bag,public,{write_concurrency,true},
-        {decentralized_counters,true}
-    ]).
-    lfu:fetch(T).
-    ets:tab2list(T).
-    
-#### execute scoring of offset counter and get keys by it into internal table for follow delete (support both interaction types)
-##### without confirm
-###### internal:
-###### Please pay attantion, that exist of internal table expires after following request to fetching 'fetch/0' or to clean 'clean/0'!
-
-    T = lfu:clean().          %% tid()
-    or
-    T = lfu:clean(async).     %% tid()
-
-###### external:
-
-    CLEAN                     %% JSON: "[{number1:[key1,key2,key3]},{number2:[key1,key2,key3]},{number3:[key1,key2,key3]},...]"
-    or
-    CLEAN:ASYNC               %% JSON: "[{number1:[key1,key2,key3]},{number2:[key1,key2,key3]},{number3:[key1,key2,key3]},...]"
-
-##### with confirm
-###### internal:
-###### Please pay attantion, that exist of internal table expires after following request to fetching 'fetch/0' or to clean 'clean/0'!
-
-    {T,R} = lfu:clean(sync).  %% {tid(),ref()}
-    lfu:clean(R,T).
-    
-###### external:
-
-    CLEAN:SYNC                %% JSON: "{[{number1:[key1,key2,key3]},{number2:[key1,key2,key3]},{number3:[key1,key2,key3]},...]:UNIQ_REF}"
-    CLEAN:UNIQ_REF            %% OK
-
-#### execute scoring of offset counter and get keys by it into external table for follow delete (support only internal interaction type)
-######  Please pay attantion, that it`s preferably using interface with internal table 'clean/0', because it ensures a data consistency with your system!
+#### get and delete key with least counter
 ##### without confirm
 ###### internal:
 
-    T = ets:new(stub,[        %% tid()
-        bag,public,{write_concurrency,true},
-        {decentralized_counters,true}
-    ]).
-    T = lfu:clean(T).         %% ref()
+    lfu:clean().                                    %% {counter,[<<"key">>]}
     or
-    T = lfu:clean(async,T).   %% ref()
+    lfu:clean(async).                               %% {counter,[<<"key">>]}
+
+###### external
+
+    CLEAN                                           %% JSON: "{counter:[key]}"
+    or
+    CLEAN:ASYNC                                     %% JSON: "{counter:[key]}"
 
 ##### with confirm
+###### Please, pay attention timeout exists to confirm, equal '90' seconds by default
 ###### internal:
 
-    T = ets:new(stub,[        %% tid()
-        bag,public,{write_concurrency,true},
-        {decentralized_counters,true}
-    ]).
-    {T,R} = lfu:clean(sync,T). %% ref()
-    lfu:clean(R,T).
+    {K,R} = lfu:clean(sync).                        %% {{counter,[<<"key">>]},ref()}
+    lfu:clean(R,K).
+    
+###### external:
 
+    CLEAN:SYNC                                      %% JSON: "{{counter:[key]}:UNIQ_REF}"
+    CLEAN:UNIQ_REF                                  %% "OK"
 
 #### put list keys with conters
 ###### initialization of state, for example, transfer of state from other implementation 'lfu'
 ###### internal:
 
-    lfu:cheat([{K1,C1},{K2,C2},{K3,C3}]).
+    lfu:cheat([{K1,C1},{K2,C2},{K3,C3}]).           %% ok
 
 ###### external:
 
-    CHEAT:key1,counter1;key2,counter2;key3,counter3 %% OK
-
-
-## configuration (under the hood)
-#### Before corrects settings make sure you understand the implementation!
-
-    -define(MIN_LIMIT,100000).
-    -define(MAX_LIMIT,1000000000).
-
-    -define(MAX_ORDER,100000000000000).     %% 1000000000 .. 100000000000000
-    -define(MIN_ORDER,100).                 %%
-
-    -define(MIN_OFFSET,10).                 %% low limit for step to next rank
-    -define(MAX_OFFSET,30).                 %% up limit for step to prev rank
-
-    -define(SCORE_OFFSET,0).                %% !!!!! must be less ?MIN_ORDER !!!!! && for example if it`s necessary begin score from 100 then need setting to 99
-
-    -define(TIMEOUT_STATE_OFFSET,90000).
-    -define(TIMEOUT_STATE_SELECT,90000).
-    -define(TIMEOUT_STATE_DELETE,90000).
-
-    -define(PREFIX_KEY,"lfu___").
-    -define(POSTFIX_KEY,"__lfu").
-
-    -define(ETS_PIDS_STORE_TABLE_NAME,lfu_pid).
-    -define(ETS_KEYS_STORE_TABLE_NAME,lfu_key).
-    
-    -define(ETS_KEYS_FETCH_TABLE_NAME,lfu_key_fetch).
-    -define(ETS_KEYS_FETCH_TABLE_OPTS,[
-        public,bag,{write_concurrency,true},
-    {decentralized_counters,true}]).
-
-#### MIN_LIMIT
-
-Range of values for the processes of low-order counters.
-
-###### Quantity the processes of low-order counters:
-
-    'MAX_LIMIT' div 'MIN_LIMIT'
-
-#### MAX_LIMIT
-
-Range of values for the processes of high-order counters.
-
-###### Quantity the processes of high-order counters:
-
-    ('MAX_ORDER'-1) div 'MAX_LIMIT'
-
-#### MIN_ORDER
-
-Low (initial) value offset counter.
-
-#### MAX_ORDER
-
-Up (end) value for key counters and offset counter.
-Keys counters reached this value will be no longer incremented.
-
-###### Allow values depending on system performance:
-
-    1000000000
-    10000000000
-    100000000000
-    1000000000000
-    10000000000000
-    100000000000000
-    1000000000000000
-
-#### MIN_OFFSET
-
-Defines minimum permissible percentage of the number of keys, with a counter value equal to or less than the current measured value of the offset counter, of the total number of keys.
-When the value is reached, the offset counter is incremented by one digit (provided that the following calculate value does not exceed 'MAX_OFFSET' value) and so on until an acceptable percentage is reached.
-
-The smaller it is, the fewer keys will be available for follow deletion.
-
-#### MAX_OFFSET
-
-Defines maximum permissible percentage of the number of keys, with a counter value equal to or less than the current measured value of the offset counter, of the total number of keys.
-When the value is reached, the offset counter is decreases by one digit (provided that the following calculate value will more 'MIN_OFFSET' value) and so on until an acceptable percentage is reached.
-
-
-The larger it is, the more keys will be available for follow deletion.
-
-#### SCORE_OFFSET
-
-The value of the key counter when a key begins to take into account by the algorithm.
-
-###### Must be less:
-    
-    'MIN_ORDER'
-
-###### example:
-
-    if it`s necessary begin score from 100 then need set to 99
-
-#### TIMEOUT_STATE_OFFSET
-
-The timeout in timing that 'lfu' main process will waiting response on 'score' command from counter processes.
-
-This value can be incresed provided overload system.
-
-#### TIMEOUT_STATE_SELECT
-
-The timeout in timing that 'lfu' main process will waiting response on 'fetch' command from counter processes.
-
-This value can be incresed provided overload system.
-
-#### TIMEOUT_STATE_DELETE
-
-The timeout in timing that 'lfu' main process will waiting confirming response on 'clean' command from outside client.
-
-This value can be control depending on how long external client will handle the keys list.
-
-#### PREFIX_KEY
-
-The prefix key for service name of key for to store process counter pids in 'lfu_key' ets.
-
-#### POSTFIX_KEY
-
-The postfix key for service name of key for to store process counter pids in 'lfu_key' ets.
-
-#### ETS_PIDS_STORE_TABLE_NAME
-
-The ets for to store process counter pids.
-
-#### ETS_KEYS_STORE_TABLE_NAME
-
-The ets for to store counters by keys.
-
-#### ETS_KEYS_FETCH_TABLE_NAME
-
-The ets for fetching keys into internal table by commands: 'fetch/0', 'clean/0'.
-
-#### ETS_KEYS_FETCH_TABLE_OPTS
-
-The list of options for creating 'ETS_KEYS_FETCH_TABLE_OPTS' ets.
+    CHEAT:key1,counter1;key2,counter2;key3,counter3 %% "OK"

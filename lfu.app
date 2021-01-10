@@ -1,18 +1,12 @@
 {application,lfu,[
     {description,"Least Frequently Used Algorithm"},
-    {vsn,"2.3.1"},
+    {vsn,"3.0.0"},
     {modules,[
         lfu_app,lfu_sup,lfu,
-        lfu_score_sups_sup,lfu_protocol,
-        lfu_exact_score_sup,lfu_exact_score,
-        lfu_quick_score_sup,lfu_quick_score,
-        lfu_utils
+        lfu_protocol,lfu_utils
     ]},
     {registered,[
-        lfu_sup,lfu,
-        lfu_score_sups_sup,
-        lfu_exact_score_sup,
-        lfu_quick_score_sup
+        lfu_sup,lfu
     ]},
     {applications,[kernel,stdlib]},
     {included_applications,[ranch]},
@@ -20,5 +14,5 @@
     {start_phases,[]},
     {env,[]},
     {maintainers,["Vladimir Solenkov"]},
-    {links,[{"Github","https://github.com/Shpaky/LFU.git"}]}
+    {links,[{"Github","https://github.com/Algorithms-Lab/LFU"}]}
 ]}.
